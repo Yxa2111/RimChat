@@ -14,6 +14,7 @@ namespace RimChat.Rpg
             DialogueRuntimeContext runtimeContext,
             string ownerWindowId,
             List<ChatMessageData> messages,
+            DialogueResponseExpectation responseExpectation,
             Action<DialogueResponseEnvelope> onReady,
             Action<string> onError,
             Action<string> onDropped)
@@ -44,7 +45,7 @@ namespace RimChat.Rpg
                         return;
                     }
 
-                    DialogueResponseEnvelope envelope = ParseEnvelope(response);
+                    DialogueResponseEnvelope envelope = ParseEnvelope(response, responseExpectation);
                     onReady?.Invoke(envelope);
                 },
                 onError: error =>
@@ -58,7 +59,8 @@ namespace RimChat.Rpg
                     onError?.Invoke(error);
                 },
                 usageChannel: DialogueUsageChannel.Rpg,
-                debugSource: AIRequestDebugSource.RpgDialogue);
+                debugSource: AIRequestDebugSource.RpgDialogue,
+                responseExpectation: responseExpectation);
 
             if (string.IsNullOrWhiteSpace(requestId))
             {
@@ -128,9 +130,11 @@ namespace RimChat.Rpg
             return DialogueContextValidator.ValidateActionExecution(runtimeContext, liveContext, out reason);
         }
 
-        private static DialogueResponseEnvelope ParseEnvelope(string response)
+        private static DialogueResponseEnvelope ParseEnvelope(
+            string response,
+            DialogueResponseExpectation responseExpectation)
         {
-            return DialogueResponseEnvelopeParser.Parse(response, DialogueUsageChannel.Rpg);
+            return DialogueResponseEnvelopeParser.Parse(response, DialogueUsageChannel.Rpg, responseExpectation);
         }
 
         private static bool TryValidateCallback(

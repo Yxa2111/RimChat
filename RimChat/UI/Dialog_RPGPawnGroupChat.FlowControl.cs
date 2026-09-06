@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using RimChat.AI;
 using RimChat.Dialogue;
 using RimChat.Memory;
@@ -43,10 +44,11 @@ namespace RimChat.UI
             if (pawnIndex < 0 || pawnIndex >= participants.Count) return;
 
             var speaker = participants[pawnIndex];
+            bool includeChoices = IsLastValidGroupSpeaker(pawnIndex);
             List<ChatMessageData> requestMessages;
             try
             {
-                requestMessages = BuildGroupRequestMessages(speaker, isFirstTurn: turnRecords.Count == 0);
+                requestMessages = BuildGroupRequestMessages(speaker, isFirstTurn: turnRecords.Count == 0, includeChoices: includeChoices);
             }
             catch (Exception ex)
             {
@@ -60,27 +62,34 @@ namespace RimChat.UI
                 runtimeContext.WithCurrentRuntimeMarkers(),
                 windowInstanceId,
                 requestMessages,
+                ResolveGroupResponseExpectation(includeChoices),
                 onReady: envelope =>
                 {
                     if (isWindowClosing) return;
+                    if (IsGroupChoiceModeEnabled && includeChoices)
+                        PrepareAndCacheGroupChoices(envelope, speaker.Pawn);
                     string text = envelope?.DialogueText ?? "";
                     int js = text.LastIndexOf("{\"actions\"");
                     if (js >= 0) text = text.Substring(0, js).TrimEnd();
                     if (string.IsNullOrWhiteSpace(text)) text = "…";
                     _cachedResponses[pawnIndex] = text;
-                    if (envelope?.Actions != null && envelope.Actions.Count > 0)
+                    if (!IsGroupChoiceModeEnabled && envelope?.Actions != null && envelope.Actions.Count > 0)
                         ExecuteActionsForSpeaker(speaker, envelope.Actions);
                     OnResponseReceived(pawnIndex);
                 },
                 onError: error =>
                 {
                     if (isWindowClosing) return;
+                    if (IsGroupChoiceModeEnabled && includeChoices)
+                        CacheGroupChoiceRequestError(error);
                     _cachedResponses[pawnIndex] = "RimChat_GroupConverse_Error".Translate(speaker.DisplayName, error);
                     OnResponseReceived(pawnIndex);
                 },
                 onDropped: reason =>
                 {
                     if (isWindowClosing) return;
+                    if (IsGroupChoiceModeEnabled && includeChoices)
+                        CacheGroupChoiceRequestError(reason);
                     _cachedResponses[pawnIndex] = "RimChat_DialogueResponseDropped".Translate(reason ?? "unknown");
                     OnResponseReceived(pawnIndex);
                 });
@@ -141,6 +150,14 @@ namespace RimChat.UI
         private void AdvanceToNextSpeaker()
         {
             if (isPlayerTurn) return;
+
+            if (localGroupGraphTransition)
+            {
+                localGroupGraphTransition = false;
+                localGroupGraphSpeakerIndex = -1;
+                TransitionToPlayerTurn();
+                return;
+            }
 
             int nextIdx = currentSpeakerIndex + 1;
             while (nextIdx < participants.Count)
@@ -218,6 +235,35 @@ namespace RimChat.UI
 
         private void TransitionToPlayerTurn()
         {
+            if (IsGroupChoiceModeEnabled && groupFinalReactionRound)
+            {
+                groupFinalReactionRound = false;
+                if (completeGroupTopicAfterFinalReaction && groupTopics.Any(topic => topic.IsEnabled))
+                {
+                    completeGroupTopicAfterFinalReaction = false;
+                    activeGroupTopic = null;
+                    activeGroupDialogueGraph = null;
+                    activeGroupScriptNodeId = null;
+                    currentRound = 0;
+                    isPlayerTurn = true;
+                    currentSpeakerIndex = -1;
+                    pauseForClick = false;
+                    isSendingRequest = false;
+                    selectedGroupTopicIndex = FindNextEnabledGroupTopic(0, 1);
+                    return;
+                }
+                completeGroupTopicAfterFinalReaction = false;
+                activeGroupDialogueGraph = null;
+                activeGroupScriptNodeId = null;
+                groupFinalReactionReceived = true;
+                groupFinalReactionCloseAt = -1f;
+                isPlayerTurn = false;
+                currentSpeakerIndex = -1;
+                pauseForClick = false;
+                isSendingRequest = false;
+                return;
+            }
+
             isPlayerTurn = true;
             currentSpeakerIndex = -1;
             pauseForClick = false;
@@ -225,6 +271,8 @@ namespace RimChat.UI
             displayedText = "";
             visibleChars = 0;
             isSendingRequest = false;
+            if (IsGroupChoiceModeEnabled)
+                AdoptCachedGroupChoices();
         }
 
         private void TrySendPlayerMessage()
@@ -250,7 +298,17 @@ namespace RimChat.UI
             isPlayerTurn = false;
             isViewingHistory = false;
             nextSpeakerRequested = false;
-            currentRound++;
+            if (IsGroupChoiceModeEnabled && sendingGroupTopicSelection)
+            {
+                sendingGroupTopicSelection = false;
+                currentRound = 1;
+            }
+            else
+            {
+                currentRound++;
+            }
+            if (IsGroupChoiceModeEnabled)
+                currentGroupChoices.Clear();
             ResetRoundFlags();
 
             // Start new round: serial queue from first pawn
@@ -273,7 +331,8 @@ namespace RimChat.UI
 
             float elapsed = Time.realtimeSinceStartup - timePlayerTextFinished;
             // Wait for first pawn's response to be ready, or 3s timeout
-            bool firstReady = _cachedResponses.ContainsKey(0);
+            int firstSpeakerIndex = localGroupGraphTransition ? localGroupGraphSpeakerIndex : 0;
+            bool firstReady = _cachedResponses.ContainsKey(firstSpeakerIndex);
             if (!firstReady && elapsed < 3.0f) return;
             if (elapsed < 1.0f) return;
             if (nextSpeakerRequested) return;
@@ -283,7 +342,7 @@ namespace RimChat.UI
             isWaitingForPlayerDelay = false;
             isSendingRequest = false;
 
-            currentSpeakerIndex = 0;
+            currentSpeakerIndex = firstSpeakerIndex;
             SkipInvalidPawnsForward();
             if (currentSpeakerIndex >= participants.Count)
             {
@@ -291,7 +350,7 @@ namespace RimChat.UI
                 return;
             }
 
-            ShowSpeakerFromCache(0);
+            ShowSpeakerFromCache(currentSpeakerIndex);
         }
 
         private void ShowSpeakerFromCache(int idx)

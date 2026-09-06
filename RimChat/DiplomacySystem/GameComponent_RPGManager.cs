@@ -8,6 +8,7 @@ using RimChat.Dialogue;
 using RimChat.Util;
 using RimChat.Memory;
 using RimChat.WorldState;
+using RimChat.Core;
 
 namespace RimChat.DiplomacySystem
 {
@@ -18,6 +19,9 @@ namespace RimChat.DiplomacySystem
         private Dictionary<string, int> pawnDialogueCooldownUntilTickById = new Dictionary<string, int>();
         private List<string> cooldownKeysByIdWorkingList;
         private List<int> cooldownValuesByIdWorkingList;
+        private Dictionary<string, int> pawnPairDialogueCooldownUntilTickById = new Dictionary<string, int>();
+        private List<string> pairCooldownKeysByIdWorkingList;
+        private List<int> pairCooldownValuesByIdWorkingList;
 
         private Dictionary<string, string> pawnPersonaPromptsById = new Dictionary<string, string>();
         private List<string> pawnPersonaPromptKeysByIdWorkingList;
@@ -100,6 +104,14 @@ namespace RimChat.DiplomacySystem
                 ref cooldownValuesByIdWorkingList);
 
             Scribe_Collections.Look(
+                ref pawnPairDialogueCooldownUntilTickById,
+                "pawnPairDialogueCooldownUntilTickById",
+                LookMode.Value,
+                LookMode.Value,
+                ref pairCooldownKeysByIdWorkingList,
+                ref pairCooldownValuesByIdWorkingList);
+
+            Scribe_Collections.Look(
                 ref pawnPersonaPromptsById,
                 "pawnPersonaPromptsById",
                 LookMode.Value,
@@ -153,12 +165,19 @@ namespace RimChat.DiplomacySystem
                     pawnPersonaPromptsById = new Dictionary<string, string>();
                 }
 
+                if (pawnPairDialogueCooldownUntilTickById == null)
+                {
+                    pawnPairDialogueCooldownUntilTickById = new Dictionary<string, int>();
+                }
+
                 MigrateLegacyPawnDictionaries();
                 int currentTick = Find.TickManager?.TicksGame ?? 0;
                 CleanupInvalidRpgDictionaries(currentTick);
 
                 cooldownKeysByIdWorkingList = null;
                 cooldownValuesByIdWorkingList = null;
+                pairCooldownKeysByIdWorkingList = null;
+                pairCooldownValuesByIdWorkingList = null;
                 pawnPersonaPromptKeysByIdWorkingList = null;
                 pawnPersonaPromptValuesByIdWorkingList = null;
                 legacyCooldownKeysWorkingList = null;
@@ -247,6 +266,74 @@ namespace RimChat.DiplomacySystem
             pawnDialogueCooldownUntilTickById.Remove(pawnId);
             remainingTicks = 0;
             return false;
+        }
+
+        public int StartRandomRpgDialoguePairCooldown(Pawn first, Pawn second)
+        {
+            float minHours = Mathf.Clamp(RimChatMod.Settings?.RpgPairCooldownMinHours ?? 12f, 1f, 72f);
+            float maxHours = Mathf.Clamp(RimChatMod.Settings?.RpgPairCooldownMaxHours ?? 24f, minHours, 72f);
+            int ticks = Mathf.RoundToInt(Rand.Range(minHours, maxHours) * 2500f);
+            StartRpgDialoguePairCooldown(first, second, ticks);
+            return ticks;
+        }
+
+        public void StartRpgDialoguePairCooldown(Pawn first, Pawn second, int cooldownTicks)
+        {
+            if (first == null || second == null || cooldownTicks <= 0)
+            {
+                return;
+            }
+
+            string pairKey = GetPawnPairStableId(first, second);
+            if (string.IsNullOrWhiteSpace(pairKey))
+            {
+                return;
+            }
+
+            int untilTick = (Find.TickManager?.TicksGame ?? 0) + cooldownTicks;
+            if (pawnPairDialogueCooldownUntilTickById.TryGetValue(pairKey, out int existing))
+            {
+                pawnPairDialogueCooldownUntilTickById[pairKey] = Mathf.Max(existing, untilTick);
+            }
+            else
+            {
+                pawnPairDialogueCooldownUntilTickById[pairKey] = untilTick;
+            }
+        }
+
+        public bool IsRpgDialoguePairOnCooldown(Pawn first, Pawn second, out int remainingTicks)
+        {
+            remainingTicks = 0;
+            string pairKey = GetPawnPairStableId(first, second);
+            if (string.IsNullOrWhiteSpace(pairKey) || pawnPairDialogueCooldownUntilTickById == null ||
+                !pawnPairDialogueCooldownUntilTickById.TryGetValue(pairKey, out int untilTick))
+            {
+                return false;
+            }
+
+            remainingTicks = untilTick - (Find.TickManager?.TicksGame ?? 0);
+            if (remainingTicks > 0)
+            {
+                return true;
+            }
+
+            pawnPairDialogueCooldownUntilTickById.Remove(pairKey);
+            remainingTicks = 0;
+            return false;
+        }
+
+        private string GetPawnPairStableId(Pawn first, Pawn second)
+        {
+            string firstId = GetPawnStableId(first);
+            string secondId = GetPawnStableId(second);
+            if (string.IsNullOrWhiteSpace(firstId) || string.IsNullOrWhiteSpace(secondId))
+            {
+                return string.Empty;
+            }
+
+            return string.CompareOrdinal(firstId, secondId) <= 0
+                ? firstId + "|" + secondId
+                : secondId + "|" + firstId;
         }
 
         public int GetDialogueCooldownUntilTick(Pawn pawn)
@@ -362,6 +449,7 @@ namespace RimChat.DiplomacySystem
                     TrySyncPawnPersonaFromRimTalk(pawn);
                 }
             }
+
             catch (Exception ex)
             {
                 Log.Warning($"[RimChat] Failed to resolve RimTalk personality for '{pawn.LabelShortCap}': {ex.Message}");
@@ -537,6 +625,22 @@ namespace RimChat.DiplomacySystem
                     pawnPersonaPromptsById.Remove(id);
                 }
             }
+
+            if (pawnPairDialogueCooldownUntilTickById == null)
+            {
+                pawnPairDialogueCooldownUntilTickById = new Dictionary<string, int>();
+            }
+            else
+            {
+                List<string> invalidPairIds = pawnPairDialogueCooldownUntilTickById
+                    .Where(entry => entry.Value <= currentTick || !CanResolveCooldownPair(entry.Key))
+                    .Select(entry => entry.Key)
+                    .ToList();
+                foreach (string id in invalidPairIds)
+                {
+                    pawnPairDialogueCooldownUntilTickById.Remove(id);
+                }
+            }
         }
 
         private static bool TryResolvePawnByStableId(string pawnId, out Pawn pawn)
@@ -548,6 +652,15 @@ namespace RimChat.DiplomacySystem
             }
 
             return DialogueContextResolver.TryResolvePawn(pawnId, out pawn);
+        }
+
+        private static bool CanResolveCooldownPair(string pairId)
+        {
+            if (string.IsNullOrWhiteSpace(pairId)) return false;
+            string[] ids = pairId.Split('|');
+            return ids.Length == 2 &&
+                TryResolvePawnByStableId(ids[0], out _) &&
+                TryResolvePawnByStableId(ids[1], out _);
         }
 
         private static string GetPawnStableId(Pawn pawn)

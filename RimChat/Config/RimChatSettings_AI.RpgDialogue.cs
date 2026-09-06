@@ -19,6 +19,24 @@ namespace RimChat.Config
             Widgets.CheckboxLabeled(enableApiRect, "RimChat_EnableRPGAPI".Translate(), ref EnableRPGAPI);
             RegisterTooltip(enableApiRect, "RimChat_EnableRPGAPITooltip");
 
+            Rect choiceModeRect = listing.GetRect(24f);
+            Widgets.CheckboxLabeled(choiceModeRect, "RimChat_RPGChoiceMode".Translate(), ref EnableRpgChoiceMode);
+            RegisterTooltip(choiceModeRect, "RimChat_RPGChoiceModeTooltip");
+
+            Rect customReplyRect = listing.GetRect(24f);
+            Widgets.CheckboxLabeled(customReplyRect, "RimChat_RPGChoiceAllowCustom".Translate(), ref AllowCustomRpgReply);
+            RegisterTooltip(customReplyRect, "RimChat_RPGChoiceAllowCustomTooltip");
+
+            listing.Label("RimChat_RPGChoiceSoftEndRound".Translate(RpgChoiceSoftEndRound));
+            RpgChoiceSoftEndRound = Mathf.RoundToInt(listing.Slider(RpgChoiceSoftEndRound, 3f, 30f));
+            listing.Label("RimChat_RPGChoiceHardEndRound".Translate(RpgChoiceHardEndRound));
+            RpgChoiceHardEndRound = Mathf.RoundToInt(listing.Slider(RpgChoiceHardEndRound, RpgChoiceSoftEndRound + 1f, 60f));
+
+            listing.Label("RimChat_RPGChoiceCooldownMin".Translate(RpgPairCooldownMinHours.ToString("0")));
+            RpgPairCooldownMinHours = listing.Slider(RpgPairCooldownMinHours, 1f, 72f);
+            listing.Label("RimChat_RPGChoiceCooldownMax".Translate(RpgPairCooldownMaxHours.ToString("0")));
+            RpgPairCooldownMaxHours = listing.Slider(RpgPairCooldownMaxHours, RpgPairCooldownMinHours, 72f);
+
             Rect selfStatusRect = listing.GetRect(24f);
             Widgets.CheckboxLabeled(selfStatusRect, "RimChat_RPGInjectSelfStatus".Translate(), ref RPGInjectSelfStatus);
             RegisterTooltip(selfStatusRect, "RimChat_RPGInjectSelfStatusTooltip");
@@ -63,6 +81,12 @@ namespace RimChat.Config
         {
             EnableRPGDialogue = true;
             EnableRPGAPI = true;
+            EnableRpgChoiceMode = true;
+            AllowCustomRpgReply = true;
+            RpgChoiceSoftEndRound = 10;
+            RpgChoiceHardEndRound = 30;
+            RpgPairCooldownMinHours = 12f;
+            RpgPairCooldownMaxHours = 24f;
             RPGInjectSelfStatus = true;
             RPGInjectInterlocutorStatus = true;
             RPGInjectFactionBackground = true;

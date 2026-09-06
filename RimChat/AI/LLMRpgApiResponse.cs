@@ -28,6 +28,8 @@ namespace RimChat.AI
             public string action;
             public string defName;
             public int amount;
+            public float value;
+            public string targetAlias;
             public string reason;
             // Additional parameters for Quest
             public string title;
@@ -149,6 +151,12 @@ namespace RimChat.AI
                 if (amount.HasValue)
                 {
                     api.amount = amount.Value;
+                }
+
+                api.targetAlias = CoalesceField(parameterSource, actionObject, "target_alias");
+                if (string.IsNullOrWhiteSpace(api.targetAlias))
+                {
+                    api.targetAlias = CoalesceField(parameterSource, actionObject, "targetAlias");
                 }
 
                 actions.Add(api);

@@ -199,7 +199,8 @@ namespace RimChat.AI
             DialogueUsageChannel usageChannel = DialogueUsageChannel.Unknown,
             AIRequestDebugSource debugSource = AIRequestDebugSource.Other,
             int? requestTimeoutSecondsOverride = null,
-            float? queueTimeoutSecondsOverride = null)
+            float? queueTimeoutSecondsOverride = null,
+            DialogueResponseExpectation responseExpectation = DialogueResponseExpectation.Default)
         {
             List<ChatMessageData> normalizedMessages = NormalizeRequestMessagesForProvider(messages, usageChannel);
             string requestId = Guid.NewGuid().ToString("N");
@@ -259,6 +260,7 @@ namespace RimChat.AI
                 onProgress,
                 usageChannel,
                 debugSource,
+                responseExpectation,
                 requestContextVersion,
                 requestTimeoutSeconds));
             
@@ -394,6 +396,7 @@ namespace RimChat.AI
             Action<float> onProgress,
             DialogueUsageChannel usageChannel,
             AIRequestDebugSource debugSource,
+            DialogueResponseExpectation responseExpectation,
             int requestContextVersion,
             int requestTimeoutSeconds)
         {
@@ -568,7 +571,7 @@ namespace RimChat.AI
                     string jsonBody;
                     try
                     {
-                        jsonBody = BuildChatCompletionJson(model, attemptMessages, config);
+                        jsonBody = BuildChatCompletionJson(model, attemptMessages, config, usageChannel);
                     }
                     catch (Exception)
                     {
@@ -863,14 +866,15 @@ namespace RimChat.AI
 
                             if (ShouldUseStructuredDialogueEnvelope(debugSource, usageChannel))
                             {
-                                parsedEnvelope = DialogueResponseEnvelopeParser.Parse(parsedResponse, usageChannel);
+                                parsedEnvelope = DialogueResponseEnvelopeParser.Parse(parsedResponse, usageChannel, responseExpectation);
                                 if (!parsedEnvelope.IsValid && parseRetryCount < MaxParseRetryCount)
                                 {
                                     parseRetryCount++;
                                     attemptMessages = AppendDialogueEnvelopeRetryMessage(
                                         attemptMessages,
                                         usageChannel,
-                                        parsedEnvelope.FailureReason);
+                                        parsedEnvelope.FailureReason,
+                                        responseExpectation);
                                     DebugLogger.WarningGated($"Dialogue envelope retry requested: reason={parsedEnvelope.FailureReason}");
                                     attempt++;
                                     continue;
@@ -879,6 +883,23 @@ namespace RimChat.AI
                                 if (!parsedEnvelope.IsValid)
                                 {
                                     string envelopeFailureReason = parsedEnvelope.FailureReason;
+                                    if (responseExpectation != DialogueResponseExpectation.Default)
+                                    {
+                                        string errorMsg = "RimChat_ErrorParseResponse".Translate() +
+                                            $" ({envelopeFailureReason ?? "invalid_dialogue_contract"})";
+                                        lock (lockObject)
+                                        {
+                                            SetRequestFailureLockless(requestId, errorMsg, envelopeFailureReason);
+                                        }
+                                        ExecuteRequestActionOnMainThread(requestId, requestContextVersion, () => onError?.Invoke(errorMsg));
+                                        string failedPreview = BuildResponsePreviewForLog(parsedResponse, 2000);
+                                        Log.Warning($"[RimChat] Required dialogue contract failed after retry: expectation={responseExpectation}, reason={envelopeFailureReason}, response_preview={failedPreview}");
+                                        debugStatus = AIRequestDebugStatus.Error;
+                                        debugResponseText = parsedResponse ?? string.Empty;
+                                        debugErrorText = errorMsg;
+                                        yield break;
+                                    }
+
                                     string rawPassthrough = parsedResponse ?? string.Empty;
                                     string safeVisible = useStableRpgFallback
                                         ? ModelOutputSanitizer.TryExtractSafeVisibleDialogue(rawPassthrough)
@@ -1548,24 +1569,47 @@ namespace RimChat.AI
         private static List<ChatMessageData> AppendDialogueEnvelopeRetryMessage(
             List<ChatMessageData> messages,
             DialogueUsageChannel usageChannel,
-            string reasonTag)
+            string reasonTag,
+            DialogueResponseExpectation responseExpectation)
         {
             List<ChatMessageData> updated = CloneMessages(messages);
-            string example = usageChannel == DialogueUsageChannel.Rpg
+            bool rpgGraph = responseExpectation == DialogueResponseExpectation.RpgScriptGraph;
+            bool rpgTopics = responseExpectation == DialogueResponseExpectation.RpgTopics;
+            bool rpgFinalReaction = responseExpectation == DialogueResponseExpectation.RpgFinalReaction;
+            string example = rpgGraph
+                ? "{\"visible_dialogue\":\"NPC回应\",\"topics\":[],\"choices\":[],\"start_node_id\":\"n1\",\"script_nodes\":[{\"id\":\"n1\",\"speaker_alias\":\"npc_1\",\"dialogue\":\"NPC回应\",\"choices\":[{\"id\":\"c1\",\"text\":\"询问细节\",\"spoken_text\":\"能请你把具体情况再讲清楚一些吗？\",\"success\":{\"effects\":[],\"end_mode\":\"normal\",\"next_node_id\":\"n2\"},\"failure\":{\"effects\":[],\"end_mode\":\"normal\",\"next_node_id\":\"n2\"}}]},{\"id\":\"n2\",\"speaker_alias\":\"npc_1\",\"dialogue\":\"NPC收尾回应\",\"choices\":[]}]}"
+                : rpgTopics
+                ? "{\"visible_dialogue\":\"NPC开场\",\"topics\":[{\"id\":\"topic_1\",\"text\":\"具体话题一\"},{\"id\":\"topic_2\",\"text\":\"具体话题二\"}],\"choices\":[]}"
+                : rpgFinalReaction
+                ? "{\"visible_dialogue\":\"NPC收尾回应\",\"topics\":[],\"choices\":[]}"
+                : usageChannel == DialogueUsageChannel.Rpg
                 ? "{\"visible_dialogue\":\"角色的一句对白\"}"
                 : "{\"visible_dialogue\":\"外交发言文本\"}";
-            string hint = usageChannel == DialogueUsageChannel.Rpg
+            string hint = rpgGraph
+                ? "Return the complete dialogue graph with start_node_id and script_nodes; do not fall back to one isolated reply. Every node, including terminal nodes, must have non-empty id, speaker_alias, dialogue, and a choices array."
+                : rpgTopics
+                ? "Return 2 or 3 concrete root topics in the topics array."
+                : rpgFinalReaction
+                ? "Return one closing NPC line with empty topics and choices arrays."
+                : usageChannel == DialogueUsageChannel.Rpg
                 ? "Put one in-character NPC line inside visible_dialogue."
                 : "Put 1-2 in-character diplomacy sentences inside visible_dialogue.";
+            string requiredChinese = rpgGraph
+                ? "必须返回完整 script_nodes 对话图，不要只回复一句；所有节点（包括终点反应节点）都必须有非空 id、speaker_alias、dialogue 和 choices；所有效果只能写在选项结果中。"
+                : rpgTopics
+                ? "必须在 topics 数组中返回 2 到 3 个具体根话题。"
+                : rpgFinalReaction
+                ? "必须返回一句收尾回应，并让 topics 与 choices 都为空数组。"
+                : "将你的发言文本放入 visible_dialogue 字段。";
             updated.Add(new ChatMessageData
             {
                 role = "user",
                 content = $"DIALOGUE_PROTOCOL_VIOLATION={reasonTag ?? "invalid_dialogue_contract"}. "
                     + $"你的上一条回复格式不符合协议要求。请严格输出一个 JSON 对象，首字符 {{ 末字符 }}，不要附加任何自然语言。"
-                    + $"将你的发言文本放入 visible_dialogue 字段。示例：{example} 若需动作则在同一 JSON 内追加 actions 数组。"
+                    + $"{requiredChinese}示例：{example}。"
                     + $" "
                     + $"Your last response violated the dialogue protocol. Output exactly one JSON object — first char {{, last char }}. {hint} "
-                    + $"Example: {example}. If actions are needed, add them inside the same JSON object. "
+                    + $"Example: {example}. "
                     + $"No text, markdown, or explanations outside the JSON object."
             });
             return NormalizeRequestMessagesForProvider(updated, usageChannel);
@@ -1786,6 +1830,12 @@ namespace RimChat.AI
             string style = ResolveCompactStyleDirective();
             if (usageChannel == DialogueUsageChannel.Rpg)
             {
+                if (RimChatMod.Settings?.EnableRpgChoiceMode == true)
+                {
+                    return style + " Output exactly one JSON dialogue graph: visible_dialogue, empty topics/choices, start_node_id, and script_nodes. " +
+                        "Each node has id, speaker_alias, dialogue, and 2-3 choices; each choice has text, a distinct polished spoken_text, success/failure outcomes, and next_node_id. " +
+                        "Ending outcomes target a terminal NPC reaction node with empty choices. Never output generic filler choices or top-level actions.";
+                }
                 return style + " Output one in-character dialogue line. " +
                     "Only append one trailing {\"actions\":[...]} JSON object when gameplay effects are required. " +
                     "Do not wrap dialogue in JSON fields.";
@@ -2312,7 +2362,7 @@ namespace RimChat.AI
             return null;
         }
 
-        private string BuildChatCompletionJson(string model, List<ChatMessageData> messages, ApiConfig config)
+        private string BuildChatCompletionJson(string model, List<ChatMessageData> messages, ApiConfig config, DialogueUsageChannel usageChannel)
         {
             var sb = new StringBuilder();
             sb.Append("{");
@@ -2342,6 +2392,8 @@ namespace RimChat.AI
             float temperature = globalSettings?.Temperature ?? 0.5f;
             int maxTokens = globalSettings?.MaxTokens ?? 2048;
             if (maxTokens < 64) maxTokens = 2048;
+            if (usageChannel == DialogueUsageChannel.Rpg && globalSettings?.EnableRpgChoiceMode == true)
+                maxTokens = Math.Max(maxTokens, 4096);
 
             // DeepSeek: temperature/top_p/presence_penalty/frequency_penalty are ignored when thinking is on.
             // Skip temperature so callers don't assume it takes effect.

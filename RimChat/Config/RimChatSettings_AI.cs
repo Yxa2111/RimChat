@@ -322,7 +322,7 @@ namespace RimChat.Config
                 AIControlSection.UISettings => 280f,
                 AIControlSection.PresenceSettings => 860f,
                 AIControlSection.NpcPushSettings => 620f,
-                AIControlSection.RpgDialogueSettings => 460f,
+                AIControlSection.RpgDialogueSettings => 700f,
                 AIControlSection.RaidSettings => 860f,
                 AIControlSection.GoodwillSettings => 320f,
                 AIControlSection.GiftSettings => 100f,

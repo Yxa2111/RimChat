@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using RimChat.AI;
+using RimChat.Rpg;
 using Verse;
 
 namespace RimChat.Dialogue
@@ -19,10 +20,17 @@ namespace RimChat.Dialogue
             "actions",
             "meta",
             "debug",
-            "dialogue_text"
+            "dialogue_text",
+            "choices",
+            "topics",
+            "start_node_id",
+            "script_nodes"
         };
 
-        public static DialogueResponseEnvelope Parse(string response, DialogueUsageChannel usageChannel)
+        public static DialogueResponseEnvelope Parse(
+            string response,
+            DialogueUsageChannel usageChannel,
+            DialogueResponseExpectation expectation = DialogueResponseExpectation.Default)
         {
             string raw = response ?? string.Empty;
             string sanitized = ModelOutputSanitizer.StripReasoningTags(raw).Trim();
@@ -33,7 +41,7 @@ namespace RimChat.Dialogue
 
             if (TryParseStructuredEnvelope(raw, sanitized, usageChannel, out DialogueResponseEnvelope structuredEnvelope))
             {
-                return structuredEnvelope;
+                return ValidateExpectation(structuredEnvelope, raw, expectation);
             }
 
             // Structured channels prefer JSON. If structured parsing failed, try legacy extraction
@@ -41,6 +49,11 @@ namespace RimChat.Dialogue
             // fires when both structured AND legacy paths fail.
             if (usageChannel == DialogueUsageChannel.Diplomacy || usageChannel == DialogueUsageChannel.Rpg)
             {
+                if (expectation != DialogueResponseExpectation.Default)
+                {
+                    return BuildFailure(raw, MissingExpectationReason(expectation));
+                }
+
                 if (TryParseLegacyEnvelope(raw, sanitized, usageChannel, out DialogueResponseEnvelope legacyEnvelope))
                 {
                     return legacyEnvelope;
@@ -55,6 +68,53 @@ namespace RimChat.Dialogue
             }
 
             return BuildFailure(raw, "unsupported_dialogue_contract");
+        }
+
+        private static DialogueResponseEnvelope ValidateExpectation(
+            DialogueResponseEnvelope envelope,
+            string raw,
+            DialogueResponseExpectation expectation)
+        {
+            if (envelope == null || !envelope.IsValid || expectation == DialogueResponseExpectation.Default)
+            {
+                return envelope;
+            }
+
+            switch (expectation)
+            {
+                case DialogueResponseExpectation.RpgTopics:
+                    int topicCount = envelope.Topics?.Count ?? 0;
+                    return topicCount >= 2 && topicCount <= 3
+                        ? envelope
+                        : BuildFailure(raw, "invalid_topic_count:" + topicCount);
+                case DialogueResponseExpectation.RpgScriptGraph:
+                    if (envelope.DialogueGraph == null)
+                    {
+                        return BuildFailure(raw, "missing_script_graph");
+                    }
+                    return envelope.DialogueGraph.IsValid
+                        ? envelope
+                        : BuildFailure(raw, "invalid_script_graph:" + (envelope.DialogueGraph.ErrorReason ?? "unknown"));
+                case DialogueResponseExpectation.RpgFinalReaction:
+                    return envelope;
+                default:
+                    return envelope;
+            }
+        }
+
+        private static string MissingExpectationReason(DialogueResponseExpectation expectation)
+        {
+            switch (expectation)
+            {
+                case DialogueResponseExpectation.RpgTopics:
+                    return "missing_topics_envelope";
+                case DialogueResponseExpectation.RpgScriptGraph:
+                    return "missing_script_graph";
+                case DialogueResponseExpectation.RpgFinalReaction:
+                    return "missing_final_reaction_envelope";
+                default:
+                    return "no_structured_envelope";
+            }
         }
 
         private static bool TryParseStructuredEnvelope(
@@ -108,10 +168,45 @@ namespace RimChat.Dialogue
                 return true;
             }
 
+            bool hasChoicesKey = topLevelKeys.Any(key => string.Equals(key, "choices", StringComparison.OrdinalIgnoreCase));
+            string choicesJson = hasChoicesKey
+                ? ExtractTopLevelArray(payload, "choices")
+                : string.Empty;
+            if (hasChoicesKey && string.IsNullOrWhiteSpace(choicesJson))
+            {
+                envelope = BuildFailure(raw, "invalid_choices_array");
+                return true;
+            }
+
+            bool hasTopicsKey = topLevelKeys.Any(key => string.Equals(key, "topics", StringComparison.OrdinalIgnoreCase));
+            string topicsJson = hasTopicsKey
+                ? ExtractTopLevelArray(payload, "topics")
+                : string.Empty;
+            if (hasTopicsKey && string.IsNullOrWhiteSpace(topicsJson))
+            {
+                envelope = BuildFailure(raw, "invalid_topics_array");
+                return true;
+            }
+
+            bool hasScriptNodesKey = topLevelKeys.Any(key => string.Equals(key, "script_nodes", StringComparison.OrdinalIgnoreCase));
+            string scriptNodesJson = hasScriptNodesKey
+                ? ExtractTopLevelArray(payload, "script_nodes")
+                : string.Empty;
+            if (hasScriptNodesKey && string.IsNullOrWhiteSpace(scriptNodesJson))
+            {
+                envelope = BuildFailure(raw, "invalid_script_nodes_array");
+                return true;
+            }
+            string startNodeId = ExtractFirstNonEmptyString(payload, "start_node_id");
+
             envelope = BuildSuccess(
                 raw,
                 visibleDialogue,
                 actionsJson,
+                choicesJson,
+                topicsJson,
+                startNodeId,
+                scriptNodesJson,
                 DialogueResponseProtocolKind.StructuredJson,
                 usageChannel);
             return true;
@@ -138,6 +233,10 @@ namespace RimChat.Dialogue
                 raw,
                 visibleDialogue,
                 actionsJson,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                string.Empty,
                 DialogueResponseProtocolKind.LegacyText,
                 usageChannel);
             return true;
@@ -147,6 +246,10 @@ namespace RimChat.Dialogue
             string raw,
             string visibleDialogue,
             string actionsJson,
+            string choicesJson,
+            string topicsJson,
+            string startNodeId,
+            string scriptNodesJson,
             DialogueResponseProtocolKind protocolKind,
             DialogueUsageChannel usageChannel)
         {
@@ -158,6 +261,19 @@ namespace RimChat.Dialogue
                 Actions = usageChannel == DialogueUsageChannel.Rpg
                     ? LLMRpgApiResponse.ParseActionsFromJson(actionsJson)
                     : new List<LLMRpgApiResponse.ApiAction>(),
+                ChoicesJson = (choicesJson ?? string.Empty).Trim(),
+                Choices = usageChannel == DialogueUsageChannel.Rpg
+                    ? RpgDialogueChoiceParser.Parse(choicesJson)
+                    : new List<RpgDialogueChoice>(),
+                TopicsJson = (topicsJson ?? string.Empty).Trim(),
+                Topics = usageChannel == DialogueUsageChannel.Rpg
+                    ? RpgDialogueTopicParser.Parse(topicsJson)
+                    : new List<RpgDialogueTopic>(),
+                StartNodeId = (startNodeId ?? string.Empty).Trim(),
+                ScriptNodesJson = (scriptNodesJson ?? string.Empty).Trim(),
+                DialogueGraph = usageChannel == DialogueUsageChannel.Rpg && !string.IsNullOrWhiteSpace(scriptNodesJson)
+                    ? RpgDialogueGraphParser.Parse(startNodeId, scriptNodesJson)
+                    : null,
                 IsValid = true,
                 FailureReason = string.Empty,
                 ProtocolKind = protocolKind
@@ -172,6 +288,13 @@ namespace RimChat.Dialogue
                 VisibleDialogue = string.Empty,
                 ActionsJson = string.Empty,
                 Actions = new List<LLMRpgApiResponse.ApiAction>(),
+                ChoicesJson = string.Empty,
+                Choices = new List<RpgDialogueChoice>(),
+                TopicsJson = string.Empty,
+                Topics = new List<RpgDialogueTopic>(),
+                StartNodeId = string.Empty,
+                ScriptNodesJson = string.Empty,
+                DialogueGraph = null,
                 IsValid = false,
                 FailureReason = reason ?? "invalid_dialogue_contract",
                 ProtocolKind = DialogueResponseProtocolKind.Unknown

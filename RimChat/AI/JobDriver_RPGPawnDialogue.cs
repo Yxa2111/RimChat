@@ -120,7 +120,9 @@ namespace RimChat.AI
                     }
 
                     var rpgManager = Current.Game?.GetComponent<GameComponent_RPGManager>();
-                    if (rpgManager != null && rpgManager.IsRpgDialogueOnCooldown(target, out _))
+                    if (rpgManager != null &&
+                        (rpgManager.IsRpgDialogueOnCooldown(target, out _) ||
+                         rpgManager.IsRpgDialoguePairOnCooldown(initiator, target, out _)))
                     {
                         Messages.Message(
                             "RimChat_RPGDialogue_CooldownRejected".Translate(),

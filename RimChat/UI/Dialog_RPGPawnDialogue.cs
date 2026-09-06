@@ -28,6 +28,7 @@ namespace RimChat.UI
         private readonly DialogueRuntimeContext runtimeContext;
         private readonly string windowLifecycleKey;
         private readonly string windowInstanceId = Guid.NewGuid().ToString("N");
+        private readonly string proactiveChoiceIntent;
         private readonly RpgDialogueConversationController conversationController = new RpgDialogueConversationController();
         private InitialRequestPromptCache initialRequestPromptCache;
         private DialogueRequestLease activeRequestLease;
@@ -81,7 +82,7 @@ namespace RimChat.UI
         private bool isViewingHistory = false;
         private int historyViewIndex = 0;
         
-        internal const float DialogueBoxHeight = 260f;
+        internal const float DialogueBoxHeight = 420f;
         internal const float PortraitWidth = 400f;
         internal const float PortraitHeight = 500f;
 
@@ -135,10 +136,12 @@ namespace RimChat.UI
             Pawn target,
             string proactiveOpening,
             DialogueRuntimeContext runtimeContext = null,
-            string windowLifecycleKey = null)
+            string windowLifecycleKey = null,
+            string proactiveChoiceIntent = null)
         {
             this.initiator = initiator;
             this.target = target;
+            this.proactiveChoiceIntent = proactiveChoiceIntent?.Trim() ?? string.Empty;
             string resolvedSessionId = runtimeContext?.DialogueSessionId;
             dialogueSessionId = string.IsNullOrWhiteSpace(resolvedSessionId)
                 ? Guid.NewGuid().ToString("N")
@@ -151,7 +154,7 @@ namespace RimChat.UI
             this.doCloseButton = false;
             this.closeOnClickedOutside = false;
             this.closeOnAccept = false;
-            this.closeOnCancel = true;
+            this.closeOnCancel = !IsRpgChoiceModeEnabled;
             this.absorbInputAroundWindow = true;
             this.forcePause = true;
             this.preventCameraMotion = true;
@@ -184,6 +187,10 @@ namespace RimChat.UI
                     return;
                 }
                 SendInitialMessage();
+            }
+            else if (IsRpgChoiceModeEnabled)
+            {
+                proactiveChoiceBootstrapPending = true;
             }
         }
 
@@ -272,6 +279,7 @@ namespace RimChat.UI
                 activeRequestRuntimeContext,
                 windowInstanceId,
                 requestMessages,
+                ResolveRpgResponseExpectation(),
                 onReady: envelope =>
                 {
                     if (isWindowClosing)
@@ -306,14 +314,21 @@ namespace RimChat.UI
                     isSendingInitialMessage = false;
                     currentDialogueText = "Error: " + error;
                     isTyping = true;
+                    RecoverChoiceModeAfterRequestFailure();
                     ReleaseActiveRequestLease();
                 },
-                onDropped: HandleDroppedResponse);
+                onDropped: reason =>
+                {
+                    isSendingInitialMessage = false;
+                    HandleDroppedResponse(reason);
+                    RecoverChoiceModeAfterRequestFailure();
+                });
 
             if (activeRequestLease == null)
             {
                 isSendingInitialMessage = false;
                 HandleDroppedResponse("send_initial_blocked");
+                RecoverChoiceModeAfterRequestFailure();
             }
         }
 
@@ -378,6 +393,7 @@ namespace RimChat.UI
 
         public override void DoWindowContents(Rect inRect)
         {
+            UpdateRpgChoiceResolution();
             // Update Alphas based on real time
             float deltaTime = Time.deltaTime;
             globalFadeAlpha = Mathf.Clamp01(globalFadeAlpha + deltaTime * FadeSpeed);
@@ -415,6 +431,8 @@ namespace RimChat.UI
             GUI.color = Color.white;
             DrawActionFeedback(inRect);
             DrawSessionHistoryPanel(inRect);
+            DrawRpgChoiceOverlays(inRect);
+            HandleRpgChoiceKeyboardInput();
 
             if (Event.current.type == EventType.MouseDown)
             {
@@ -442,7 +460,8 @@ namespace RimChat.UI
                 // Click outside dialogue box → close window (normal exit)
                 if (!insideDialogueBox)
                 {
-                    Close();
+                    if (IsRpgChoiceModeEnabled) RequestRpgExit();
+                    else Close();
                     Event.current.Use();
                 }
                 // Click inside dialogue box to skip text animation
@@ -484,6 +503,7 @@ namespace RimChat.UI
 
         public override void PreClose()
         {
+            ApplyPairCooldownOnClose();
             isWindowClosing = true;
             CloseActiveRequestLease();
             TryFinalizeArchiveSessionOnClose();
@@ -621,7 +641,8 @@ namespace RimChat.UI
             DrawPawnNameWithMenu(nameRect, speakerPawn, renderSpeaker, speakerRightAligned);
 
             // Text Label Box
-            Rect textArea = new Rect(contentRect.x, contentRect.y + 20f, contentRect.width, contentRect.height - 70f);
+            float reservedChoiceHeight = CanShowRpgChoices ? 220f : 70f;
+            Rect textArea = new Rect(contentRect.x, contentRect.y + 20f, contentRect.width, contentRect.height - reservedChoiceHeight);
             
             // If the player is speaking, set right alignment by adjusting Rect
             if (renderSpeaker == initiator.LabelShort)
@@ -678,7 +699,11 @@ namespace RimChat.UI
             }
             
             // Input Mode Display
-            if (!isTyping && !isSendingInitialMessage && !isShowingUserText && drawLive && !isDialogueEndedByNpc)
+            if ((CanShowRpgTopics || CanShowRpgChoices) && drawLive)
+            {
+                DrawRpgChoicePanel(contentRect);
+            }
+            else if (!IsRpgChoiceModeEnabled && !isTyping && !isSendingInitialMessage && !isShowingUserText && drawLive && !isDialogueEndedByNpc)
             {
                 float inputHeight = 45f;
                 Rect bottomArea = new Rect(contentRect.x, contentRect.yMax - inputHeight, contentRect.width, inputHeight);
@@ -794,7 +819,10 @@ namespace RimChat.UI
             }
 
             var rpgManager = Current.Game?.GetComponent<RimChat.DiplomacySystem.GameComponent_RPGManager>();
-            if (rpgManager != null && rpgManager.IsRpgDialogueOnCooldown(target, out int remainingTicks))
+            int remainingTicks = 0;
+            if (rpgManager != null &&
+                (rpgManager.IsRpgDialogueOnCooldown(target, out remainingTicks) ||
+                 rpgManager.IsRpgDialoguePairOnCooldown(initiator, target, out remainingTicks)))
             {
                 float remainingHours = Math.Max(0f, remainingTicks / 2500f);
                 string cooldownText = "RimChat_RPGDialogue_CooldownBlockedWithHours".Translate(remainingHours.ToString("F1"));
@@ -811,6 +839,25 @@ namespace RimChat.UI
             {
                 string textToSend = userReplyText.Trim();
                 chatHistory.Add(new ChatMessageData { role = "user", content = textToSend });
+                if (IsRpgChoiceModeEnabled)
+                {
+                    if (!sendingRpgTopicSelection)
+                    {
+                        completedRpgChoiceRounds++;
+                    }
+                    else
+                    {
+                        sendingRpgTopicSelection = false;
+                    }
+                    currentRpgChoices.Clear();
+                    if (!string.IsNullOrWhiteSpace(pendingChoiceSystemContext))
+                    {
+                        chatHistory.Add(new ChatMessageData { role = "system", content = pendingChoiceSystemContext });
+                        dialogPages.Add(new DialoguePage { speakerName = "System", text = pendingChoiceSystemContext });
+                        RecordSessionDialogueTurn("System", pendingChoiceSystemContext, false);
+                        pendingChoiceSystemContext = null;
+                    }
+                }
                 dialogPages.Add(new DialoguePage { speakerName = initiator.LabelShort, text = textToSend });
                 RecordSessionDialogueTurn(initiator.LabelShort, textToSend, true);
                 RpgDialogueTraceTracker.RegisterTurn(initiator, target, true, textToSend, dialogueSessionId);
@@ -850,6 +897,7 @@ namespace RimChat.UI
                     activeRequestRuntimeContext,
                     windowInstanceId,
                     requestMessages,
+                    ResolveRpgResponseExpectation(),
                     onReady: envelope =>
                     {
                         if (isWindowClosing)
@@ -877,11 +925,13 @@ namespace RimChat.UI
 
                         aiResponseReady = true;
                         aiResponseText = "Error: " + error;
+                        RecoverChoiceModeAfterRequestFailure();
                         ReleaseActiveRequestLease();
                     },
                     onDropped: reason =>
                     {
                         HandleDroppedResponse(reason);
+                        RecoverChoiceModeAfterRequestFailure();
                         aiResponseReady = true;
                     });
 
@@ -889,6 +939,7 @@ namespace RimChat.UI
                 {
                     aiResponseReady = true;
                     aiResponseText = "Error: " + "RimChat_DialogueRequestUnavailable".Translate().ToString();
+                    RecoverChoiceModeAfterRequestFailure();
                 }
             }
         }
@@ -915,14 +966,27 @@ namespace RimChat.UI
         private List<ChatMessageData> BuildCompressedRpgRequestMessages()
         {
             var request = new List<ChatMessageData>();
-            bool openingTurn = !HasVisibleAssistantReply(chatHistory);
-            string currentTurnUserIntent = ExtractLatestVisibleUserIntent(chatHistory);
+            List<ChatMessageData> scopedHistory = activeRpgTopic != null &&
+                activeRpgTopicHistoryStartIndex >= 0 &&
+                activeRpgTopicHistoryStartIndex <= chatHistory.Count
+                ? chatHistory.Skip(activeRpgTopicHistoryStartIndex).ToList()
+                : chatHistory.ToList();
+            bool openingTurn = !HasVisibleAssistantReply(scopedHistory);
+            string currentTurnUserIntent = ExtractLatestVisibleUserIntent(scopedHistory);
             request.Add(new ChatMessageData
             {
                 role = "system",
                 content = BuildRpgSystemPromptForRequest(openingTurn, currentTurnUserIntent)
             });
-            List<ChatMessageData> conversation = chatHistory
+            List<ChatMessageData> recentChoiceResults = scopedHistory
+                .Where(message => IsSystemRole(message?.role) &&
+                    (message.content ?? string.Empty).StartsWith("[RpgChoiceResult]", StringComparison.Ordinal))
+                .ToList();
+            foreach (ChatMessageData resultMessage in recentChoiceResults.Skip(Math.Max(0, recentChoiceResults.Count - 12)))
+            {
+                request.Add(new ChatMessageData { role = "system", content = resultMessage.content });
+            }
+            List<ChatMessageData> conversation = scopedHistory
                 .Where(message => !IsSystemRole(message?.role))
                 .ToList();
             request.AddRange(DialogueContextCompressionService.BuildFromChatMessages(conversation));

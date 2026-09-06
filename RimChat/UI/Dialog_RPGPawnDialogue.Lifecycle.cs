@@ -55,6 +55,13 @@ namespace RimChat.UI
                 return;
             }
 
+            if (IsRpgChoiceModeEnabled)
+            {
+                envelope.DialogueText = NormalizeEnvelopeVisibleDialogueForDisplay(envelope, "prepare_choice_envelope");
+                PrepareChoiceEnvelope(envelope);
+                return;
+            }
+
             if (RimChatMod.Settings.EnableRPGAPI)
             {
                 var apiResponse = new LLMRpgApiResponse
@@ -76,6 +83,14 @@ namespace RimChat.UI
         {
             if (pendingResponseEnvelope == null)
             {
+                return;
+            }
+
+            if (IsRpgChoiceModeEnabled)
+            {
+                AdoptChoiceEnvelope(pendingResponseEnvelope);
+                pendingResponseEnvelope = null;
+                ReleaseActiveRequestLease();
                 return;
             }
 

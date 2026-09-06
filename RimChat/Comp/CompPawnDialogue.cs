@@ -85,7 +85,10 @@ namespace RimChat.Comp
 
             // Check cooldown — show disabled with remaining time
             var rpgManager = Current.Game?.GetComponent<RimChat.DiplomacySystem.GameComponent_RPGManager>();
-            if (rpgManager != null && rpgManager.IsRpgDialogueOnCooldown(targetPawn, out int remainingTicks))
+            int remainingTicks = 0;
+            if (rpgManager != null &&
+                (rpgManager.IsRpgDialogueOnCooldown(targetPawn, out remainingTicks) ||
+                 rpgManager.IsRpgDialoguePairOnCooldown(selPawn, targetPawn, out remainingTicks)))
             {
                 float remainingHours = System.Math.Max(0f, remainingTicks / 2500f);
                 string cooldownLabel = "RimChat_Converse_Disabled_Cooldown".Translate(remainingHours.ToString("F1"));

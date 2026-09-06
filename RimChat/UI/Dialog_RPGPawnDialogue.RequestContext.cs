@@ -766,7 +766,7 @@ namespace RimChat.UI
 
             prompt = ApplyNonVerbalSpeechFormatting(prompt);
             UpdateRpgActionContractGuard(prompt, settings?.EnableRPGAPI == true);
-            return prompt;
+            return BuildChoicePromptContract(prompt);
         }
 
         private void UpdateRpgActionContractGuard(string prompt, bool rpgApiEnabled)

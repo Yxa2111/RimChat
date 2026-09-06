@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -5,6 +6,7 @@ using RimChat.AI;
 using RimChat.Config;
 using RimChat.Core;
 using RimChat.Persistence;
+using RimChat.Rpg;
 using RimWorld;
 using Verse;
 
@@ -12,12 +14,12 @@ namespace RimChat.UI
 {
     public partial class Dialog_RPGPawnGroupChat
     {
-        private List<ChatMessageData> BuildGroupRequestMessages(GroupChatParticipant speaker, bool isFirstTurn)
+        private List<ChatMessageData> BuildGroupRequestMessages(GroupChatParticipant speaker, bool isFirstTurn, bool includeChoices)
         {
             var request = new List<ChatMessageData>();
 
             // System prompt: speaker's persona + group context
-            string systemPrompt = BuildGroupSystemPrompt(speaker, isFirstTurn);
+            string systemPrompt = BuildGroupSystemPrompt(speaker, isFirstTurn, includeChoices);
             request.Add(new ChatMessageData { role = "system", content = systemPrompt });
 
             // Build context from accumulated turns
@@ -27,7 +29,7 @@ namespace RimChat.UI
             return request;
         }
 
-        private string BuildGroupSystemPrompt(GroupChatParticipant speaker, bool isFirstTurn)
+        private string BuildGroupSystemPrompt(GroupChatParticipant speaker, bool isFirstTurn, bool includeChoices)
         {
             // Reuse existing RPG prompt for this speaker as a base
             string basePrompt;
@@ -58,11 +60,35 @@ namespace RimChat.UI
             sb.AppendLine("- Stay in character. Generate 1-3 sentences of dialogue.");
             sb.AppendLine("- Do not speak for other characters or the player.");
             sb.AppendLine();
-            sb.AppendLine("OUTPUT FORMAT (strict, same as 1-on-1):");
-            sb.AppendLine("- Write natural dialogue as plain text.");
-            sb.AppendLine("- If gameplay effects are needed, append exactly one raw JSON object in the form {\"actions\":[...]} after the dialogue.");
-            sb.AppendLine("- Never wrap dialogue into JSON fields like \"dialogue\", \"response\", or \"content\".");
-            sb.AppendLine("- Do NOT output ONLY JSON. Always include visible dialogue text first.");
+            if (!IsGroupChoiceModeEnabled)
+            {
+                sb.AppendLine("OUTPUT FORMAT (strict, same as 1-on-1):");
+                sb.AppendLine("- Write natural dialogue as plain text.");
+                sb.AppendLine("- If gameplay effects are needed, append exactly one raw JSON object in the form {\"actions\":[...]} after the dialogue.");
+                sb.AppendLine("- Never wrap dialogue into JSON fields like \"dialogue\", \"response\", or \"content\".");
+                sb.AppendLine("- Do NOT output ONLY JSON. Always include visible dialogue text first.");
+            }
+
+            if (IsGroupChoiceModeEnabled)
+            {
+                if (includeChoices)
+                {
+                    return RpgChoicePromptBuilder.AppendChoiceContract(
+                        sb.ToString(),
+                        currentRound,
+                        participants.Select((participant, index) => $"npc_{index + 1}={participant.DisplayName}"),
+                        lockedGroupChoiceActions,
+                        groupFinalReactionRound,
+                        requestInitialGroupTopics,
+                        activeGroupTopic?.Text,
+                        groupTopics.Where(topic => topic.IsCompleted).Select(topic => topic.Text),
+                        activeGroupDialogueGraph?.IsValid == true ? activeGroupScriptNodeId : null);
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("=== RIMCHAT GROUP CRPG CONTRACT (HIGHEST PRIORITY) ===");
+                sb.AppendLine("Return exactly {\"visible_dialogue\":\"your in-character line\",\"choices\":[]}. This is an intermediate group speaker; do not offer player choices and never emit top-level actions.");
+            }
 
             return sb.ToString();
         }
@@ -83,6 +109,7 @@ namespace RimChat.UI
             if (isFirstTurn && turnRecords.Count == 0)
             {
                 sb.AppendLine($"[Group chat begins. {speaker.DisplayName} speaks first.]");
+                AppendPendingGroupResultContext(sb);
                 return sb.ToString();
             }
 
@@ -113,7 +140,23 @@ namespace RimChat.UI
                 }
             }
 
+            AppendPendingGroupResultContext(sb);
             return sb.ToString();
+        }
+
+        private void AppendPendingGroupResultContext(StringBuilder sb)
+        {
+            foreach (string historicalResult in groupRpgResultHistory
+                .Take(Math.Max(0, groupRpgResultHistory.Count - 1))
+                .Skip(Math.Max(0, groupRpgResultHistory.Count - 12)))
+            {
+                sb.AppendLine();
+                sb.AppendLine(historicalResult);
+            }
+            if (string.IsNullOrWhiteSpace(pendingGroupResultContext)) return;
+            sb.AppendLine();
+            sb.AppendLine("The following result was already rolled and applied by local game code. React to it exactly as stated; never change the roll, DC, success, or effects:");
+            sb.AppendLine(pendingGroupResultContext);
         }
     }
 }

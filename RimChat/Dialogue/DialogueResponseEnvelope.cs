@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using RimChat.AI;
+using RimChat.Rpg;
 
 namespace RimChat.Dialogue
 {
@@ -9,6 +10,14 @@ namespace RimChat.Dialogue
         Unknown = 0,
         StructuredJson = 1,
         LegacyText = 2
+    }
+
+    public enum DialogueResponseExpectation
+    {
+        Default = 0,
+        RpgTopics = 1,
+        RpgScriptGraph = 2,
+        RpgFinalReaction = 3
     }
 
     /// <summary>
@@ -20,6 +29,13 @@ namespace RimChat.Dialogue
         public string VisibleDialogue { get; set; }
         public string ActionsJson { get; set; }
         public List<LLMRpgApiResponse.ApiAction> Actions { get; set; } = new List<LLMRpgApiResponse.ApiAction>();
+        public string ChoicesJson { get; set; }
+        public List<RpgDialogueChoice> Choices { get; set; } = new List<RpgDialogueChoice>();
+        public string TopicsJson { get; set; }
+        public List<RpgDialogueTopic> Topics { get; set; } = new List<RpgDialogueTopic>();
+        public string StartNodeId { get; set; }
+        public string ScriptNodesJson { get; set; }
+        public RpgDialogueGraph DialogueGraph { get; set; }
         public bool IsStaleDropped { get; set; }
         public string DropReason { get; set; }
         public bool IsValid { get; set; }
@@ -45,6 +61,15 @@ namespace RimChat.Dialogue
             string actionsJson = string.IsNullOrWhiteSpace(ActionsJson)
                 ? string.Empty
                 : (ActionsJson ?? string.Empty).Trim();
+            string choicesJson = string.IsNullOrWhiteSpace(ChoicesJson)
+                ? string.Empty
+                : (ChoicesJson ?? string.Empty).Trim();
+            string topicsJson = string.IsNullOrWhiteSpace(TopicsJson)
+                ? string.Empty
+                : (TopicsJson ?? string.Empty).Trim();
+            string scriptNodesJson = string.IsNullOrWhiteSpace(ScriptNodesJson)
+                ? string.Empty
+                : (ScriptNodesJson ?? string.Empty).Trim();
 
             var builder = new StringBuilder();
             builder.Append("{\"visible_dialogue\":\"");
@@ -54,6 +79,23 @@ namespace RimChat.Dialogue
             {
                 builder.Append(",\"actions\":");
                 builder.Append(actionsJson);
+            }
+            if (!string.IsNullOrWhiteSpace(choicesJson))
+            {
+                builder.Append(",\"choices\":");
+                builder.Append(choicesJson);
+            }
+            if (!string.IsNullOrWhiteSpace(topicsJson))
+            {
+                builder.Append(",\"topics\":");
+                builder.Append(topicsJson);
+            }
+            if (!string.IsNullOrWhiteSpace(scriptNodesJson))
+            {
+                builder.Append(",\"start_node_id\":\"");
+                builder.Append(EscapeJsonString(StartNodeId ?? string.Empty));
+                builder.Append("\",\"script_nodes\":");
+                builder.Append(scriptNodesJson);
             }
 
             builder.Append("}");

@@ -2735,4 +2735,59 @@ ID：{5}
     <RimChat_GroupConverse_Skipped>{0} 暂时无法回应...</RimChat_GroupConverse_Skipped>
     <RimChat_GroupHistory_Live>实时</RimChat_GroupHistory_Live>
     <RimChat_GroupHistory_View>记录</RimChat_GroupHistory_View>
+
+    <!-- Pawn RPG 分支与本地 D20 检定 -->
+    <RimChat_RPGChoiceMode>CRPG 选项模式</RimChat_RPGChoiceMode>
+    <RimChat_RPGChoiceModeTooltip>开场先生成二至三个话题根节点，再在所选话题内展开有限分支；已完成话题会锁定，骰点、概率和效果全部由本地结算。</RimChat_RPGChoiceModeTooltip>
+    <RimChat_RPGChoiceAllowCustom>允许自定义回答</RimChat_RPGChoiceAllowCustom>
+    <RimChat_RPGChoiceAllowCustomTooltip>在当前话题分支内提供可选的自由文字输入，并显示明确的发送按钮。</RimChat_RPGChoiceAllowCustomTooltip>
+    <RimChat_RPGChoiceSoftEndRound>开始提供结局：第 {0} 轮</RimChat_RPGChoiceSoftEndRound>
+    <RimChat_RPGChoiceHardEndRound>强制结束：第 {0} 轮</RimChat_RPGChoiceHardEndRound>
+    <RimChat_RPGChoiceCooldownMin>配对冷却下限：{0} 小时</RimChat_RPGChoiceCooldownMin>
+    <RimChat_RPGChoiceCooldownMax>配对冷却上限：{0} 小时</RimChat_RPGChoiceCooldownMax>
+    <RimChat_RPGChoice_ApproachPersuasion>说服</RimChat_RPGChoice_ApproachPersuasion>
+    <RimChat_RPGChoice_ApproachReason>讲理</RimChat_RPGChoice_ApproachReason>
+    <RimChat_RPGChoice_ApproachIntimidation>威吓</RimChat_RPGChoice_ApproachIntimidation>
+    <RimChat_RPGChoice_ApproachCare>关怀</RimChat_RPGChoice_ApproachCare>
+    <RimChat_RPGChoice_CheckBreakdown>{0} {1}：技能 {2}；状态 {3}；情境 {4}；DC {5}；成功率 {6}%</RimChat_RPGChoice_CheckBreakdown>
+    <RimChat_RPGChoice_NoCheck>无需检定</RimChat_RPGChoice_NoCheck>
+    <RimChat_RPGChoice_Success>成功：{0}</RimChat_RPGChoice_Success>
+    <RimChat_RPGChoice_Failure>失败：{0}</RimChat_RPGChoice_Failure>
+    <RimChat_RPGChoice_NoImmediateEffect>无即时效果</RimChat_RPGChoice_NoImmediateEffect>
+    <RimChat_RPGChoice_EffectFailed>效果包已拒绝：{0}</RimChat_RPGChoice_EffectFailed>
+    <RimChat_RPGChoice_EffectMemory>记忆：{0}（心情 {1}）</RimChat_RPGChoice_EffectMemory>
+    <RimChat_RPGChoice_EffectGoodwill>好感 {0}</RimChat_RPGChoice_EffectGoodwill>
+    <RimChat_RPGChoice_EffectResistance>抵抗 -{0}</RimChat_RPGChoice_EffectResistance>
+    <RimChat_RPGChoice_EffectWill>意志 -{0}</RimChat_RPGChoice_EffectWill>
+    <RimChat_RPGChoice_EffectRomance>确立恋爱关系</RimChat_RPGChoice_EffectRomance>
+    <RimChat_RPGChoice_EffectMarriage>结为配偶</RimChat_RPGChoice_EffectMarriage>
+    <RimChat_RPGChoice_EffectBreakup>结束恋爱关系</RimChat_RPGChoice_EffectBreakup>
+    <RimChat_RPGChoice_EffectDivorce>离婚</RimChat_RPGChoice_EffectDivorce>
+    <RimChat_RPGChoice_EffectDate>开始约会</RimChat_RPGChoice_EffectDate>
+    <RimChat_RPGChoice_EffectRecruit>招募 {0}</RimChat_RPGChoice_EffectRecruit>
+    <RimChat_RPGChoice_EffectJob>执行工作：{0}</RimChat_RPGChoice_EffectJob>
+    <RimChat_RPGChoice_EffectIncident>触发事件：{0}</RimChat_RPGChoice_EffectIncident>
+    <RimChat_RPGChoice_EffectInspiration>获得灵感</RimChat_RPGChoice_EffectInspiration>
+    <RimChat_RPGChoice_EffectConvertIdeology>完整转换意识形态</RimChat_RPGChoice_EffectConvertIdeology>
+    <RimChat_RPGChoice_EffectCertainty>确定度 {0}</RimChat_RPGChoice_EffectCertainty>
+    <RimChat_RPGChoice_ShowCustom>自定义回答</RimChat_RPGChoice_ShowCustom>
+    <RimChat_RPGChoice_HideCustom>收起自定义回答</RimChat_RPGChoice_HideCustom>
+    <RimChat_RPGChoice_SendCustom>发送</RimChat_RPGChoice_SendCustom>
+    <RimChat_RPGChoice_GenerationError>选项错误（{0}）：{1}</RimChat_RPGChoice_GenerationError>
+    <RimChat_RPGChoice_ErrorLabel>错误</RimChat_RPGChoice_ErrorLabel>
+    <RimChat_RPGChoice_NavigationMeta>导航 · 不消耗回合</RimChat_RPGChoice_NavigationMeta>
+    <RimChat_RPGChoice_NavigationTooltip>返回根话题列表，不会完成当前话题。</RimChat_RPGChoice_NavigationTooltip>
+    <RimChat_RPGTopic_GenerationError>话题生成错误：{0}</RimChat_RPGTopic_GenerationError>
+    <RimChat_RPGTopic_Available>可选择</RimChat_RPGTopic_Available>
+    <RimChat_RPGTopic_Completed>已完成</RimChat_RPGTopic_Completed>
+    <RimChat_RPGTopic_SelectHint>选择一个话题进入对应分支；已完成话题不可再次进入。</RimChat_RPGTopic_SelectHint>
+    <RimChat_RPGTopic_PlayerOpens>我们来聊聊这个：{0}</RimChat_RPGTopic_PlayerOpens>
+    <RimChat_RPGTopic_BackToTopics>返回话题列表</RimChat_RPGTopic_BackToTopics>
+    <RimChat_RPGTopic_Returned>已返回话题列表；尚未完成的话题仍可再次进入。</RimChat_RPGTopic_Returned>
+    <RimChat_RPGChoice_Exit>直接结束</RimChat_RPGChoice_Exit>
+    <RimChat_RPGChoice_Expired>该选项已失效，分支已自动刷新。</RimChat_RPGChoice_Expired>
+    <RimChat_RPGChoice_EscapeConfirm>两秒内再次按 Esc 即可结束对话。</RimChat_RPGChoice_EscapeConfirm>
+    <RimChat_RPGChoice_KeyHints>↑↓ 选择｜Enter 确认｜Space 快进｜Esc 退出</RimChat_RPGChoice_KeyHints>
+    <RimChat_RPGChoice_RollSuccess>检定成功</RimChat_RPGChoice_RollSuccess>
+    <RimChat_RPGChoice_RollFailure>检定失败</RimChat_RPGChoice_RollFailure>
 </LanguageData>

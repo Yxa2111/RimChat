@@ -2644,4 +2644,59 @@ Selected prisoners: {1}
     <RimChat_GroupConverse_Skipped>{0} is unavailable...</RimChat_GroupConverse_Skipped>
     <RimChat_GroupHistory_Live>Live</RimChat_GroupHistory_Live>
     <RimChat_GroupHistory_View>History</RimChat_GroupHistory_View>
+
+    <!-- Pawn RPG choices and local D20 checks -->
+    <RimChat_RPGChoiceMode>CRPG choice mode</RimChat_RPGChoiceMode>
+    <RimChat_RPGChoiceModeTooltip>Start with two or three topic roots, then follow finite branches inside the selected topic. Completed topics are locked; rolls, probabilities and effects are resolved locally.</RimChat_RPGChoiceModeTooltip>
+    <RimChat_RPGChoiceAllowCustom>Allow custom replies</RimChat_RPGChoiceAllowCustom>
+    <RimChat_RPGChoiceAllowCustomTooltip>Show optional free-text input with a visible Send button inside the active topic branch.</RimChat_RPGChoiceAllowCustomTooltip>
+    <RimChat_RPGChoiceSoftEndRound>Start offering endings: round {0}</RimChat_RPGChoiceSoftEndRound>
+    <RimChat_RPGChoiceHardEndRound>Force an ending: round {0}</RimChat_RPGChoiceHardEndRound>
+    <RimChat_RPGChoiceCooldownMin>Pair cooldown minimum: {0} hours</RimChat_RPGChoiceCooldownMin>
+    <RimChat_RPGChoiceCooldownMax>Pair cooldown maximum: {0} hours</RimChat_RPGChoiceCooldownMax>
+    <RimChat_RPGChoice_ApproachPersuasion>Persuasion</RimChat_RPGChoice_ApproachPersuasion>
+    <RimChat_RPGChoice_ApproachReason>Reason</RimChat_RPGChoice_ApproachReason>
+    <RimChat_RPGChoice_ApproachIntimidation>Intimidation</RimChat_RPGChoice_ApproachIntimidation>
+    <RimChat_RPGChoice_ApproachCare>Care</RimChat_RPGChoice_ApproachCare>
+    <RimChat_RPGChoice_CheckBreakdown>{0} {1}: {2}; status {3}; context {4}; DC {5}; success {6}%</RimChat_RPGChoice_CheckBreakdown>
+    <RimChat_RPGChoice_NoCheck>No check</RimChat_RPGChoice_NoCheck>
+    <RimChat_RPGChoice_Success>Success: {0}</RimChat_RPGChoice_Success>
+    <RimChat_RPGChoice_Failure>Failure: {0}</RimChat_RPGChoice_Failure>
+    <RimChat_RPGChoice_NoImmediateEffect>No immediate effect</RimChat_RPGChoice_NoImmediateEffect>
+    <RimChat_RPGChoice_EffectFailed>Effect package rejected: {0}</RimChat_RPGChoice_EffectFailed>
+    <RimChat_RPGChoice_EffectMemory>Memory: {0} (mood {1})</RimChat_RPGChoice_EffectMemory>
+    <RimChat_RPGChoice_EffectGoodwill>Goodwill {0}</RimChat_RPGChoice_EffectGoodwill>
+    <RimChat_RPGChoice_EffectResistance>Resistance -{0}</RimChat_RPGChoice_EffectResistance>
+    <RimChat_RPGChoice_EffectWill>Will -{0}</RimChat_RPGChoice_EffectWill>
+    <RimChat_RPGChoice_EffectRomance>Begin a romantic relationship</RimChat_RPGChoice_EffectRomance>
+    <RimChat_RPGChoice_EffectMarriage>Become spouses</RimChat_RPGChoice_EffectMarriage>
+    <RimChat_RPGChoice_EffectBreakup>End the relationship</RimChat_RPGChoice_EffectBreakup>
+    <RimChat_RPGChoice_EffectDivorce>Divorce</RimChat_RPGChoice_EffectDivorce>
+    <RimChat_RPGChoice_EffectDate>Begin dating</RimChat_RPGChoice_EffectDate>
+    <RimChat_RPGChoice_EffectRecruit>Recruit {0}</RimChat_RPGChoice_EffectRecruit>
+    <RimChat_RPGChoice_EffectJob>Ordered job: {0}</RimChat_RPGChoice_EffectJob>
+    <RimChat_RPGChoice_EffectIncident>Incident: {0}</RimChat_RPGChoice_EffectIncident>
+    <RimChat_RPGChoice_EffectInspiration>Gain inspiration</RimChat_RPGChoice_EffectInspiration>
+    <RimChat_RPGChoice_EffectConvertIdeology>Full ideology conversion</RimChat_RPGChoice_EffectConvertIdeology>
+    <RimChat_RPGChoice_EffectCertainty>Certainty {0}</RimChat_RPGChoice_EffectCertainty>
+    <RimChat_RPGChoice_ShowCustom>Custom reply</RimChat_RPGChoice_ShowCustom>
+    <RimChat_RPGChoice_HideCustom>Hide custom reply</RimChat_RPGChoice_HideCustom>
+    <RimChat_RPGChoice_SendCustom>Send</RimChat_RPGChoice_SendCustom>
+    <RimChat_RPGChoice_GenerationError>Choice error ({0}): {1}</RimChat_RPGChoice_GenerationError>
+    <RimChat_RPGChoice_ErrorLabel>ERROR</RimChat_RPGChoice_ErrorLabel>
+    <RimChat_RPGChoice_NavigationMeta>Navigation · no round consumed</RimChat_RPGChoice_NavigationMeta>
+    <RimChat_RPGChoice_NavigationTooltip>Return to the root topic list without completing this topic.</RimChat_RPGChoice_NavigationTooltip>
+    <RimChat_RPGTopic_GenerationError>Topic generation error: {0}</RimChat_RPGTopic_GenerationError>
+    <RimChat_RPGTopic_Available>Available</RimChat_RPGTopic_Available>
+    <RimChat_RPGTopic_Completed>Completed</RimChat_RPGTopic_Completed>
+    <RimChat_RPGTopic_SelectHint>Select a topic to enter its dialogue branch. Completed topics cannot be reopened.</RimChat_RPGTopic_SelectHint>
+    <RimChat_RPGTopic_PlayerOpens>Let's talk about this: {0}</RimChat_RPGTopic_PlayerOpens>
+    <RimChat_RPGTopic_BackToTopics>Back to topics</RimChat_RPGTopic_BackToTopics>
+    <RimChat_RPGTopic_Returned>Returned to the topic list. The unfinished topic remains available.</RimChat_RPGTopic_Returned>
+    <RimChat_RPGChoice_Exit>End dialogue</RimChat_RPGChoice_Exit>
+    <RimChat_RPGChoice_Expired>This choice is no longer valid; choices were refreshed.</RimChat_RPGChoice_Expired>
+    <RimChat_RPGChoice_EscapeConfirm>Press Esc again within two seconds to end the dialogue.</RimChat_RPGChoice_EscapeConfirm>
+    <RimChat_RPGChoice_KeyHints>↑↓ Select | Enter Confirm | Space Fast-forward | Esc Exit</RimChat_RPGChoice_KeyHints>
+    <RimChat_RPGChoice_RollSuccess>SUCCESS</RimChat_RPGChoice_RollSuccess>
+    <RimChat_RPGChoice_RollFailure>FAILURE</RimChat_RPGChoice_RollFailure>
 </LanguageData>

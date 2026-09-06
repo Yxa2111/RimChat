@@ -270,6 +270,12 @@ namespace RimChat.Config
         public bool EnableRPGDialogue = true;
         public bool EnableRPGAPI = true;
         public bool EnableRPGNonVerbalPawnSpeech = true;
+        public bool EnableRpgChoiceMode = true;
+        public bool AllowCustomRpgReply = true;
+        public int RpgChoiceSoftEndRound = 10;
+        public int RpgChoiceHardEndRound = 30;
+        public float RpgPairCooldownMinHours = 12f;
+        public float RpgPairCooldownMaxHours = 24f;
 
         // Connection Test State
         private string connectionTestStatus = "";
@@ -485,6 +491,16 @@ namespace RimChat.Config
             Scribe_Values.Look(ref EnableRPGDialogue, "EnableRPGDialogue", true);
             Scribe_Values.Look(ref EnableRPGAPI, "EnableRPGAPI", true);
             Scribe_Values.Look(ref EnableRPGNonVerbalPawnSpeech, "EnableRPGNonVerbalPawnSpeech", true);
+            Scribe_Values.Look(ref EnableRpgChoiceMode, "EnableRpgChoiceMode", true);
+            Scribe_Values.Look(ref AllowCustomRpgReply, "AllowCustomRpgReply", true);
+            Scribe_Values.Look(ref RpgChoiceSoftEndRound, "RpgChoiceSoftEndRound", 10);
+            Scribe_Values.Look(ref RpgChoiceHardEndRound, "RpgChoiceHardEndRound", 30);
+            Scribe_Values.Look(ref RpgPairCooldownMinHours, "RpgPairCooldownMinHours", 12f);
+            Scribe_Values.Look(ref RpgPairCooldownMaxHours, "RpgPairCooldownMaxHours", 24f);
+            RpgChoiceSoftEndRound = Mathf.Clamp(RpgChoiceSoftEndRound, 3, 30);
+            RpgChoiceHardEndRound = Mathf.Clamp(RpgChoiceHardEndRound, RpgChoiceSoftEndRound + 1, 60);
+            RpgPairCooldownMinHours = Mathf.Clamp(RpgPairCooldownMinHours, 1f, 72f);
+            RpgPairCooldownMaxHours = Mathf.Clamp(RpgPairCooldownMaxHours, RpgPairCooldownMinHours, 72f);
             
             // Refined RPG Prompt Settings
             // RPG prompt text persistence is handled by Prompt/Custom/PawnDialoguePrompt_Custom.json only.

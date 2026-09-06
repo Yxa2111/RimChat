@@ -27,6 +27,7 @@ namespace RimChat.PawnRpgPush
 
         private int npcLoadId = -1;
         private int playerLoadId = -1;
+        private string proactiveChoiceIntent = string.Empty;
 
         /// <summary>
         /// Assign the next unique loadID and return it.
@@ -48,7 +49,7 @@ namespace RimChat.PawnRpgPush
             LetterLoadIDField?.SetValue(this, nextUniqueLoadID++);
         }
 
-        public void Setup(Pawn npcPawn, Pawn playerPawn, TaggedString labelText, TaggedString bodyText, LetterDef letterDef)
+        public void Setup(Pawn npcPawn, Pawn playerPawn, TaggedString labelText, TaggedString bodyText, LetterDef letterDef, string choiceIntent = null)
         {
             npcLoadId = npcPawn?.thingIDNumber ?? -1;
             playerLoadId = playerPawn?.thingIDNumber ?? -1;
@@ -57,6 +58,7 @@ namespace RimChat.PawnRpgPush
             Text = bodyText;
             def = letterDef ?? LetterDefOf.NeutralEvent;
             lookTargets = npcPawn != null ? new LookTargets(npcPawn) : LookTargets.Invalid;
+            proactiveChoiceIntent = choiceIntent?.Trim() ?? string.Empty;
         }
 
         public override IEnumerable<DiaOption> Choices
@@ -71,7 +73,7 @@ namespace RimChat.PawnRpgPush
                     var openOption = new DiaOption("RimChat_PawnRpgPush_OpenDialogue".Translate())
                     {
                         resolveTree = true,
-                        action = delegate { TryOpenDialogue(playerPawn, npcPawn, proactiveOpening); }
+                        action = delegate { TryOpenDialogue(playerPawn, npcPawn, proactiveOpening, proactiveChoiceIntent); }
                     };
                     yield return openOption;
                 }
@@ -86,6 +88,7 @@ namespace RimChat.PawnRpgPush
             base.ExposeData();
             Scribe_Values.Look(ref npcLoadId, "npcLoadId", -1);
             Scribe_Values.Look(ref playerLoadId, "playerLoadId", -1);
+            Scribe_Values.Look(ref proactiveChoiceIntent, "proactiveChoiceIntent", string.Empty);
             // Legacy loadID=0 fix is now handled by
             // LoadedObjectDirectoryPatch_FixLegacyLetterLoadID which runs
             // before RegisterLoaded, preventing the "Letter_0" duplicate key
@@ -115,7 +118,7 @@ namespace RimChat.PawnRpgPush
             return null;
         }
 
-        private static void TryOpenDialogue(Pawn playerPawn, Pawn npcPawn, string proactiveOpening)
+        private static void TryOpenDialogue(Pawn playerPawn, Pawn npcPawn, string proactiveOpening, string choiceIntent)
         {
             if (playerPawn == null || npcPawn == null || Find.WindowStack == null)
             {
@@ -138,7 +141,7 @@ namespace RimChat.PawnRpgPush
             }
 
             DialogueWindowCoordinator.TryOpen(
-                DialogueOpenIntent.CreateRpg(playerPawn, npcPawn, playerPawn.Map, proactiveOpening),
+                DialogueOpenIntent.CreateRpg(playerPawn, npcPawn, playerPawn.Map, proactiveOpening, choiceIntent),
                 out _);
         }
 

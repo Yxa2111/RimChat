@@ -222,7 +222,7 @@ namespace RimChat.PawnRpgPush
             LetterDef letterDef = GetLetterDef(context);
             var letter = new ChoiceLetter_PawnRpgInitiatedDialogue();
             letter.AssignLoadID();
-            letter.Setup(npcPawn, playerPawn, title, text, letterDef);
+            letter.Setup(npcPawn, playerPawn, title, text, letterDef, BuildProactiveChoiceIntent(context));
             Find.LetterStack.ReceiveLetter(letter, string.Empty, 0, true);
 
             recentMessageHashes[dedupKey] = currentTick;
@@ -371,6 +371,12 @@ namespace RimChat.PawnRpgPush
             }
 
             return $"{context.SourceTag}:{context.Reason}";
+        }
+
+        private string BuildProactiveChoiceIntent(PawnRpgTriggerContext context)
+        {
+            if (context == null) return string.Empty;
+            return $"category={context.Category}; trigger={context.TriggerType}; reason={BuildReasonText(context)}; severity={context.Severity}";
         }
 
         private string SanitizeModelOutput(string output)

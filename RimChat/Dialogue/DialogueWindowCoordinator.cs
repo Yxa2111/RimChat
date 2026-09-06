@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimChat.UI;
+using RimChat.DiplomacySystem;
 using RimWorld;
 using Verse;
 
@@ -57,12 +58,22 @@ namespace RimChat.Dialogue
                 return true;
             }
 
+            GameComponent_RPGManager rpgManager = Current.Game?.GetComponent<GameComponent_RPGManager>();
+            if (rpgManager != null &&
+                (rpgManager.IsRpgDialogueOnCooldown(liveContext.Target, out _) ||
+                 rpgManager.IsRpgDialoguePairOnCooldown(liveContext.Initiator, liveContext.Target, out _)))
+            {
+                reason = "rpg_dialogue_cooldown";
+                return false;
+            }
+
             var rpgWindow = new Dialog_RPGPawnDialogue(
                 liveContext.Initiator,
                 liveContext.Target,
                 intent.ProactiveOpening,
                 snapshot,
-                snapshot.WindowKey);
+                snapshot.WindowKey,
+                intent.ProactiveChoiceIntent);
             Find.WindowStack.Add(rpgWindow);
             return true;
         }
@@ -109,6 +120,15 @@ namespace RimChat.Dialogue
             if (participants.Count == 0)
             {
                 reason = "no_valid_participants";
+                return false;
+            }
+
+            GameComponent_RPGManager rpgManager = Current.Game?.GetComponent<GameComponent_RPGManager>();
+            if (rpgManager != null && participants.Any(participant =>
+                    rpgManager.IsRpgDialogueOnCooldown(participant, out _) ||
+                    rpgManager.IsRpgDialoguePairOnCooldown(initiator, participant, out _)))
+            {
+                reason = "rpg_group_participant_cooldown";
                 return false;
             }
 

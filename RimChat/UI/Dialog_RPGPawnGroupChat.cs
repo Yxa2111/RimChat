@@ -176,7 +176,7 @@ namespace RimChat.UI
             doCloseButton = false;
             closeOnClickedOutside = false;
             closeOnAccept = false;
-            closeOnCancel = true;
+            closeOnCancel = !IsGroupChoiceModeEnabled;
             absorbInputAroundWindow = true;
             forcePause = true;
             preventCameraMotion = true;
@@ -208,11 +208,17 @@ namespace RimChat.UI
             dialogueBoxCurrentColor = Color.Lerp(dialogueBoxCurrentColor, dialogueBoxTargetColor, deltaTime * DialogueBoxColorBlendSpeed);
 
             UpdateFlowControl();
+            UpdateGroupChoiceState();
             DrawPortraits(inRect);
             DrawDialogueBox(inRect);
             DrawClickToContinueHint(inRect);
             DrawHistoryPanel(inRect);
             DrawActionFeedback(inRect);
+            if (IsGroupChoiceModeEnabled)
+            {
+                DrawGroupChoiceOverlays(inRect);
+                HandleGroupChoiceKeyboard();
+            }
 
             if (Event.current.type == EventType.MouseDown)
             {
@@ -236,7 +242,8 @@ namespace RimChat.UI
 
                 if (!insideDialogueBox)
                 {
-                    Close();
+                    if (IsGroupChoiceModeEnabled) RequestGroupExit();
+                    else Close();
                     Event.current.Use();
                 }
                 else if (isTyping)
@@ -272,6 +279,7 @@ namespace RimChat.UI
         public override void PreClose()
         {
             isWindowClosing = true;
+            if (IsGroupChoiceModeEnabled) ApplyGroupPairCooldowns();
             CloseActiveRequestLease();
             foreach (var p in participants)
             {
@@ -330,7 +338,8 @@ namespace RimChat.UI
                 DrawSpeakerName(nameRect, renderSpeaker, rightAligned, namePawn);
             }
 
-            Rect textArea = new Rect(contentRect.x, contentRect.y + 20f, contentRect.width, contentRect.height - 70f);
+            float choiceReserve = (CanShowGroupTopics || CanShowGroupChoices) ? 220f : 0f;
+            Rect textArea = new Rect(contentRect.x, contentRect.y + 20f, contentRect.width, contentRect.height - 70f - choiceReserve);
 
             // Right-align player text (reuse 1v1 pattern exactly)
             if (rightAligned)
@@ -381,8 +390,12 @@ namespace RimChat.UI
             if (rightAligned)
                 Text.Anchor = TextAnchor.UpperLeft;
 
-            // Player input: only when NOT showing player text, NOT typing, NOT sending
-            if (!isTyping && !isSendingRequest && !isShowingPlayerText && drawLive && isPlayerTurn)
+            if (CanShowGroupTopics || CanShowGroupChoices)
+            {
+                DrawGroupChoicePanel(contentRect);
+            }
+            // Legacy player input: only when choice mode is disabled.
+            else if (!IsGroupChoiceModeEnabled && !isTyping && !isSendingRequest && !isShowingPlayerText && drawLive && isPlayerTurn)
             {
                 float inputHeight = 45f;
                 Rect bottomArea = new Rect(contentRect.x, contentRect.yMax - inputHeight, contentRect.width, inputHeight);
