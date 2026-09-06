@@ -882,7 +882,7 @@ namespace RimChat.Persistence
         private static string BuildAvailableActionNamesVariableValue(DialogueScenarioContext context)
         {
             return "adjust_goodwill, send_gift, request_aid, request_caravan, request_visitor, "
-                 + "request_raid, request_item_airdrop, request_info, pay_prisoner_ransom, "
+                 + "request_raid, request_item_airdrop, accept_item_airdrop, request_info, pay_prisoner_ransom, "
                  + "create_quest, trigger_incident, exit_dialogue, go_offline, set_dnd, "
                  + "reject_request, publish_public_post";
         }

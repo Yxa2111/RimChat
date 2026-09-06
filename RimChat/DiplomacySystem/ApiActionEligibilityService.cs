@@ -35,6 +35,7 @@ namespace RimChat.DiplomacySystem
             "request_raid_call_everyone",
             "request_raid_waves",
             "request_item_airdrop",
+            "accept_item_airdrop",
             "request_info",
             "pay_prisoner_ransom",
             "trigger_incident",
@@ -316,6 +317,21 @@ namespace RimChat.DiplomacySystem
                         }
 
                         return ActionValidationResult.AllowedResult();
+                    }
+
+                case "accept_item_airdrop":
+                    {
+                        // The diplomacy dialogue validates the session-scoped request id before expansion.
+                        // Keep this action visible in API limits without requiring session state here.
+                        if (parameters == null || lightweight)
+                        {
+                            return ActionValidationResult.AllowedResult();
+                        }
+
+                        string requestId = TryReadStringParameter(parameters, "request_id");
+                        return string.IsNullOrWhiteSpace(requestId)
+                            ? ActionValidationResult.Denied("airdrop_request_id_required", "accept_item_airdrop requires parameter 'request_id'.")
+                            : ActionValidationResult.AllowedResult();
                     }
 
                 case "request_info":
@@ -1076,6 +1092,8 @@ namespace RimChat.DiplomacySystem
                 case "request_raid_waves":
                     return settings.EnableAIRaidRequest; // 复用 raid 开关
                 case "request_item_airdrop":
+                    return settings.EnableAIItemAirdrop;
+                case "accept_item_airdrop":
                     return settings.EnableAIItemAirdrop;
                 case "request_info":
                     return settings.EnablePrisonerRansom;

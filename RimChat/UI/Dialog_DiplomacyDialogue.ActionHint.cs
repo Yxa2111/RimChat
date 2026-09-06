@@ -20,7 +20,8 @@ namespace RimChat.UI
             AIActionNames.TriggerIncident,
             AIActionNames.ExitDialogue,
             AIActionNames.GoOffline,
-            AIActionNames.SetDnd
+            AIActionNames.SetDnd,
+            AIActionNames.AcceptItemAirdrop
         };
 
         private static readonly string[] ActionHintOrder =
@@ -36,6 +37,7 @@ namespace RimChat.UI
             AIActionNames.RequestRaidCallEveryone,
             AIActionNames.RequestRaidWaves,
             AIActionNames.RequestItemAirdrop,
+            AIActionNames.AcceptItemAirdrop,
             AIActionNames.RequestInfo,
             AIActionNames.PayPrisonerRansom,
             AIActionNames.TriggerIncident,
@@ -55,6 +57,7 @@ namespace RimChat.UI
             ["invalid_faction"] = "RimChat_ActionsHint_Reason_InvalidFaction",
             ["airdrop_need_required"] = "RimChat_ActionsHint_Reason_AirdropNeedRequired",
             ["airdrop_payment_items_required"] = "RimChat_ActionsHint_Reason_AirdropPaymentRequired",
+            ["airdrop_request_id_required"] = "RimChat_ItemAirdropAcceptRequestIdRequired",
             ["airdrop_scenario_invalid"] = "RimChat_ActionsHint_Reason_AirdropScenarioInvalid",
             ["caravan_hostile"] = "RimChat_ActionsHint_Reason_CaravanHostile",
             ["visitor_hostile"] = "RimChat_ActionsHint_Reason_VisitorHostile",

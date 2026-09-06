@@ -29,6 +29,22 @@ namespace RimChat.UI
                 return false;
             }
 
+            if (currentSession.hasPendingAirdropTradeCardReference)
+            {
+                string requestId = GetAirdropTradeCardRequestId(pendingIntent.Parameters);
+                if (!currentSession.IsCurrentAirdropTradeCardRequest(requestId))
+                {
+                    currentSession.pendingDelayedActionIntent = null;
+                    currentSession.AddMessage(
+                        "System",
+                        "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString(),
+                        false,
+                        DialogueMessageType.System);
+                    SaveFactionMemory(currentSession, currentFaction);
+                    return true;
+                }
+            }
+
             if (!TryReadPendingAirdropCandidates(pendingIntent.Parameters, out List<PendingAirdropSelectionCandidate> candidates) ||
                 candidates.Count == 0)
             {
@@ -44,12 +60,16 @@ namespace RimChat.UI
             mappedParameters.Remove(AirdropPendingCandidatesKey);
             mappedParameters.Remove(AirdropPendingFailureCodeKey);
             mappedParameters["selected_def"] = selected.DefName;
-            if (TryExtractAirdropRequestedCount(playerMessage, out int requestedCount))
+            bool isTradeCardBound = !string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(pendingIntent.Parameters));
+            if (!isTradeCardBound && TryExtractAirdropRequestedCount(playerMessage, out int requestedCount))
             {
                 mappedParameters["count"] = requestedCount;
             }
 
-            currentSession.ClearPendingAirdropTradeCardReference();
+            if (!isTradeCardBound)
+            {
+                currentSession.ClearPendingAirdropTradeCardReference();
+            }
 
             var mappedAction = new AIAction
             {

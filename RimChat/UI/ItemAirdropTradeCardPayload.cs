@@ -12,6 +12,8 @@ namespace RimChat.UI
         public string OfferItemLabel { get; set; }
         public int OfferItemCount { get; set; }
         public string Scenario { get; set; } = "trade";
+        public string RequestId { get; set; }
+        public bool IsRevision { get; set; }
 
         public string NeedDefName { get; set; }
         public string NeedLabel { get; set; }

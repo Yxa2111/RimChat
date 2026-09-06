@@ -2001,6 +2001,13 @@ namespace RimChat.UI
                 return;
             }
 
+            if (session.hasPendingAirdropTradeCardReference &&
+                IsEditableAirdropTradeCardPending(session))
+            {
+                OpenPendingAirdropTradeCardEditor();
+                return;
+            }
+
             ActionValidationResult validation = ValidateManualAirdropTradeEntry();
             if (validation != null && !validation.Allowed)
             {
@@ -2712,6 +2719,11 @@ namespace RimChat.UI
             RecordInputHistory(playerMessage);
             if (airdropTradeCardPayload != null)
             {
+                if (string.IsNullOrWhiteSpace(airdropTradeCardPayload.RequestId))
+                {
+                    airdropTradeCardPayload.RequestId = Guid.NewGuid().ToString("N");
+                }
+
                 currentSession?.SetPendingAirdropTradeCardReference(
                     airdropTradeCardPayload.GetNeedReferenceText(),
                     airdropTradeCardPayload.NeedDefName,
@@ -2723,7 +2735,8 @@ namespace RimChat.UI
                     airdropTradeCardPayload.OfferItemCount,
                     airdropTradeCardPayload.Scenario,
                     airdropTradeCardPayload.ShippingPodCount,
-                    airdropTradeCardPayload.ShippingCostSilver);
+                    airdropTradeCardPayload.ShippingCostSilver,
+                    airdropTradeCardPayload.RequestId);
             }
             currentSession.lastPlayerRequestText = playerMessage;
             currentSession.lastPlayerRequestWasAirdropTradeCard = airdropTradeCardPayload != null;
@@ -2747,7 +2760,8 @@ namespace RimChat.UI
                     airdropTradeCardPayload.OfferItemCount,
                     airdropTradeCardPayload.OfferUnitPrice,
                     airdropTradeCardPayload.OfferTotalPrice,
-                    playerSpeakerPawn);
+                    playerSpeakerPawn,
+                    airdropTradeCardPayload.RequestId);
             }
             else
             {
@@ -3033,9 +3047,10 @@ namespace RimChat.UI
             // Reinforce JSON format when airdrop data is present
             if (currentSession.hasPendingAirdropTradeCardReference)
             {
-                result += "\n\n[REMINDER] Your reply MUST be a JSON object with \"visible_dialogue\" and \"actions\" array. "
-                    + "If you agree to this trade, include: {\"action\":\"request_item_airdrop\",\"parameters\":{\"need\":\"...\",\"payment_items\":[{\"item\":\"...\",\"count\":N}]}}. "
-                    + "Do NOT reply with plain text only.";
+                result += "\n\n[REMINDER] This is a pending airdrop trade card. "
+                    + "If you accept it, you MUST call exactly {\"action\":\"accept_item_airdrop\",\"parameters\":{\"request_id\":\"<the exact request_id from AirdropTradeCardReference>\"}}. "
+                    + "Do not call request_item_airdrop directly for this card, do not change its terms, and do not claim the trade is completed before the player confirms. "
+                    + "If you reject or counter-offer, do not call accept_item_airdrop.";
             }
 
             return result;
@@ -3957,7 +3972,9 @@ namespace RimChat.UI
                         sb.AppendLine("Our traders will visit you soon.");
                         break;
                     case AIActionNames.RequestItemAirdrop:
-                        sb.AppendLine("We will dispatch a supply drop to your colony.");
+                        sb.AppendLine(IsAirdropTradeCardBoundAction(action)
+                            ? "The quoted airdrop is ready for your final confirmation."
+                            : "We will dispatch a supply drop to your colony.");
                         break;
                     case AIActionNames.PayPrisonerRansom:
                         bool hasTarget = action.Parameters != null &&

@@ -215,13 +215,25 @@ action_rules.txt 文件允许你为 AI 添加额外的指令，这些指令会�
   - payment_items 必填且至少 1 行；每行都必须有 item（string）和 count（正整数）；item 优先 defName，若用 label 必须可唯一匹配
   - 系统会将 payment_items 按市场价求和后向下取整（Floor）生成预算（budget_silver）
   - 若当前是轨道商通信，request_item_airdrop 是唯一允许的具体物资交换动作；不得改成“去地面据点送货/交订单”类任务
-  - 若当前请求来自已精确绑定 need_def 的空投交易卡，则该绑定物资是强约束；允许调整数量/付款方式或重报价，但不得静默替换成别的物资
+  - 若当前请求来自已精确绑定 need_def 的空投交易卡，则该绑定物资是强约束；可以拒绝或重报价；如需改变数量、物资或付款方式，必须等待玩家编辑并提交修订卡，不得静默修改原卡
   - 命中黑名单、预算不足、无合法落点或无可匹配 Def 时必须失败
   - 只执行 Top1，不得随机替代
 **示例**：
   - request_item_airdrop,need:1000原木,payment_items:[{"item":"Silver","count":1200}]
   - request_item_airdrop,need:medical supplies,payment_items:[{"item":"Silver","count":800},{"item":"Gold","count":3}]
   - request_item_airdrop,need:50钢铁,payment_items:[{"item":"Silver","count":280},{"item":"ComponentIndustrial","count":8}],scenario:trade
+
+2.7.1. accept_item_airdrop
+-------------------
+**作用**：接受当前派系会话中指定 request_id 的空投交易卡，并严格按该卡的完整报价进入准备和玩家确认流程
+**参数**：
+  - request_id: 当前 [AirdropTradeCardReference] 中的精确 UUID（必填）
+**限制**：
+  - 只能接受当前会话中仍有效的交易卡；禁止猜测、生成或复用其他 request_id
+  - 交易卡存在时只能用 accept_item_airdrop 接受，不能用 request_item_airdrop 自填参数绕过交易卡
+  - 该动作接受原卡的物资、数量、付款物资、付款数量和场景，不允许改价或静默调整
+  - 派系之前拒绝或重报价后仍可使用原 request_id 改变主意接受；玩家修改请求后必须使用修订卡的新 request_id
+  - 玩家最终确认前不得宣称交易已经完成
 
 2.8. request_info
 -------------------

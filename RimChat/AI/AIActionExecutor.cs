@@ -76,6 +76,7 @@ namespace RimChat.AI
                     AIActionNames.RequestVisitor => ExecuteRequestVisitor(action),
                     AIActionNames.RequestRaid => ExecuteRequestRaid(action),
                     AIActionNames.RequestItemAirdrop => ExecuteRequestItemAirdrop(action),
+                    AIActionNames.AcceptItemAirdrop => ActionResult.Failure("accept_item_airdrop must be handled by the diplomacy trade-card pipeline."),
                     AIActionNames.RequestInfo => ActionResult.Failure("request_info must be handled by diplomacy dialogue pipeline."),
                     AIActionNames.PayPrisonerRansom => ExecutePayPrisonerRansom(action),
                     AIActionNames.RejectRequest => ExecuteRejectRequest(action),
@@ -305,6 +306,7 @@ namespace RimChat.AI
                 AIActionNames.RequestRaidCallEveryone => settings.EnableAIRaidRequest,
                 AIActionNames.RequestRaidWaves => settings.EnableAIRaidRequest,
                 AIActionNames.RequestItemAirdrop => settings.EnableAIItemAirdrop,
+                AIActionNames.AcceptItemAirdrop => settings.EnableAIItemAirdrop,
                 AIActionNames.RequestInfo => settings.EnablePrisonerRansom,
                 AIActionNames.PayPrisonerRansom => settings.EnablePrisonerRansom,
                 AIActionNames.RejectRequest => true, // 拒绝request总是允许

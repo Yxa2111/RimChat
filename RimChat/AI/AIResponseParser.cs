@@ -496,6 +496,7 @@ namespace RimChat.AI
                 "request_raid_call_everyone",
                 "request_raid_waves",
                 "request_item_airdrop",
+                "accept_item_airdrop",
                 "request_info",
                 "pay_prisoner_ransom",
                 "trigger_incident",

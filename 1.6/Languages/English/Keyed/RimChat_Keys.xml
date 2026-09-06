@@ -1140,12 +1140,27 @@
     <RimChat_AirdropSubmitInsufficientOffer>Offer item {0} has insufficient stock. Requested: {1}, Available: {2}.</RimChat_AirdropSubmitInsufficientOffer>
     <RimChat_AirdropTradeCard_NoSuggestions>No matching items found.</RimChat_AirdropTradeCard_NoSuggestions>
     <RimChat_AirdropTradeCard_BubbleTitle>[Airdrop Request]</RimChat_AirdropTradeCard_BubbleTitle>
+    <RimChat_AirdropTradeCard_EditRequest>Edit request</RimChat_AirdropTradeCard_EditRequest>
+    <RimChat_AirdropTradeCard_CancelRequest>Cancel request</RimChat_AirdropTradeCard_CancelRequest>
     <RimChat_AirdropTradeCard_BubbleShippingSummary>Shipping: {0} pods / {1} silver | Final quote: {2}</RimChat_AirdropTradeCard_BubbleShippingSummary>
     <RimChat_AirdropTradeCard_PayLabel>Pay</RimChat_AirdropTradeCard_PayLabel>
     <RimChat_AirdropTradeCard_GainLabel>Gain</RimChat_AirdropTradeCard_GainLabel>
     <RimChat_AirdropTradeCard_CountLabel>Count</RimChat_AirdropTradeCard_CountLabel>
     <RimChat_AirdropTradeCard_TotalPriceLabel>Total</RimChat_AirdropTradeCard_TotalPriceLabel>
     <RimChat_AirdropTradeCard_ArrowRight>→</RimChat_AirdropTradeCard_ArrowRight>
+    <RimChat_ItemAirdropAcceptRequestIdRequired>accept_item_airdrop requires the exact request_id from the current trade card.</RimChat_ItemAirdropAcceptRequestIdRequired>
+    <RimChat_ItemAirdropAcceptNoPendingRequest>No active airdrop trade card is available to accept.</RimChat_ItemAirdropAcceptNoPendingRequest>
+    <RimChat_ItemAirdropAcceptAlreadyCompleted>Airdrop request {0} is already completed.</RimChat_ItemAirdropAcceptAlreadyCompleted>
+    <RimChat_ItemAirdropAcceptRequestIdMismatch>The airdrop request ID {0} does not match the current trade card.</RimChat_ItemAirdropAcceptRequestIdMismatch>
+    <RimChat_ItemAirdropAcceptRequestExpired>Airdrop request {0} is expired, cancelled, completed, or superseded.</RimChat_ItemAirdropAcceptRequestExpired>
+    <RimChat_ItemAirdropAcceptRequestInProgress>Airdrop request {0} is already being prepared or confirmed.</RimChat_ItemAirdropAcceptRequestInProgress>
+    <RimChat_ItemAirdropAcceptTermsInvalid>Airdrop request {0} has incomplete trade-card terms.</RimChat_ItemAirdropAcceptTermsInvalid>
+    <RimChat_ItemAirdropAcceptTermsChanged>Airdrop request terms changed during preparation: expected {0} x{1} for {2} x{3}. The request was not executed.</RimChat_ItemAirdropAcceptTermsChanged>
+    <RimChat_ItemAirdropAcceptConflict>Conflicting airdrop actions were returned. Choose one request decision.</RimChat_ItemAirdropAcceptConflict>
+    <RimChat_ItemAirdropAcceptInvalidRequest>The airdrop acceptance request could not be validated.</RimChat_ItemAirdropAcceptInvalidRequest>
+    <RimChat_ItemAirdropAcceptFactionMismatch>Airdrop request {0} belongs to a different faction dialogue.</RimChat_ItemAirdropAcceptFactionMismatch>
+    <RimChat_ItemAirdropAcceptUseRequestId>This trade card must be accepted with accept_item_airdrop and its exact request_id.</RimChat_ItemAirdropAcceptUseRequestId>
+    <RimChat_ItemAirdropTradeCardCancelled>Pending airdrop request cancelled.</RimChat_ItemAirdropTradeCardCancelled>
     <RimChat_Search>Search:</RimChat_Search>
     <RimChat_Loading>Loading...</RimChat_Loading>
     <RimChat_ModelList_Loading>Loading model list...</RimChat_ModelList_Loading>

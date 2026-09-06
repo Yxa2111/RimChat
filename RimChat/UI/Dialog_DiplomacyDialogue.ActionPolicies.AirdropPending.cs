@@ -45,6 +45,17 @@ namespace RimChat.UI
                 return false;
             }
 
+            if (currentSession.hasPendingAirdropTradeCardReference)
+            {
+                string requestId = GetAirdropTradeCardRequestId(baseIntent.Parameters);
+                if (!currentSession.IsCurrentAirdropTradeCardRequest(requestId))
+                {
+                    currentSession.pendingDelayedActionIntent = null;
+                    response.DialogueText = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
+                    return true;
+                }
+            }
+
             if (!TryReadPendingAirdropCandidates(baseIntent.Parameters, out List<PendingAirdropSelectionCandidate> candidates) ||
                 candidates.Count == 0)
             {
@@ -81,12 +92,19 @@ namespace RimChat.UI
             mappedParameters.Remove(AirdropPendingCandidatesKey);
             mappedParameters.Remove(AirdropPendingFailureCodeKey);
             mappedParameters["selected_def"] = selected.DefName;
-            if (TryExtractAirdropRequestedCount(playerMessage, out int requestedCount))
+            bool isTradeCardBound = !string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(baseIntent.Parameters));
+            if (!isTradeCardBound && TryExtractAirdropRequestedCount(playerMessage, out int requestedCount))
             {
                 mappedParameters["count"] = requestedCount;
             }
 
-            currentSession.ClearPendingAirdropTradeCardReference();
+            // Keep the business request card alive while a bound acceptance is
+            // waiting for the player to resolve an item-selection prompt. The
+            // exact request id remains the authority for the retry.
+            if (string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(baseIntent.Parameters)))
+            {
+                currentSession.ClearPendingAirdropTradeCardReference();
+            }
 
             if (response.Actions == null)
             {

@@ -580,7 +580,27 @@ namespace RimChat.UI
             GUI.color = new Color(0.09f, 0.11f, 0.10f, 1f);
             string title = "RimChat_AirdropTradeCard_BubbleTitle".Translate().ToString();
             float titleHeight = Mathf.Max(AirdropCardTitleBandHeight, Text.CalcHeight(title, contentWidth));
-            Widgets.Label(new Rect(contentX, contentY, contentWidth, titleHeight), title);
+            bool editable = IsEditableAirdropTradeCard(msg);
+            float actionButtonWidth = editable ? 58f : 0f;
+            float actionButtonGap = editable ? 4f : 0f;
+            float actionButtonsWidth = editable ? actionButtonWidth * 2f + actionButtonGap : 0f;
+            Rect titleRect = new Rect(contentX, contentY, Mathf.Max(40f, contentWidth - actionButtonsWidth), titleHeight);
+            Widgets.Label(titleRect, title);
+            if (editable)
+            {
+                float buttonsX = contentX + contentWidth - actionButtonsWidth;
+                Rect editRect = new Rect(buttonsX, contentY, actionButtonWidth, 22f);
+                if (Widgets.ButtonText(editRect, "RimChat_AirdropTradeCard_EditRequest".Translate()))
+                {
+                    OpenPendingAirdropTradeCardEditor();
+                }
+
+                Rect cancelRect = new Rect(editRect.xMax + actionButtonGap, contentY, actionButtonWidth, 22f);
+                if (Widgets.ButtonText(cancelRect, "RimChat_AirdropTradeCard_CancelRequest".Translate()))
+                {
+                    CancelPendingAirdropTradeCardRequest();
+                }
+            }
             GUI.color = Color.white;
 
             contentY += titleHeight + 3f;

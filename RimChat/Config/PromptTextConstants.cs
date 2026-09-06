@@ -129,6 +129,7 @@ namespace RimChat.Config
         public const string StrictJsonFormatRequirement = "你的整条回复必须是一个 JSON 对象，首字符 { 末字符 }，不得在 JSON 外附加任何文本、解释或 Markdown。禁止用 ```json ``` 代码块包裹，禁止在 JSON 前后写任何对白或说明——直接输出原始 JSON。";
         public const string StrictJsonFormatTemplate = "{\n  \"visible_dialogue\":\"外交发言文本\"\n}";
         public const string StrictJsonFormatTemplateWithAction = "{\n  \"visible_dialogue\":\"外交发言文本\",\n  \"actions\":[\n    {\"action\":\"request_item_airdrop\",\"parameters\":{\"need\":\"1000原木\",\"payment_items\":[{\"item\":\"Silver\",\"count\":1200}]}}\n  ]\n}";
+        public const string StrictJsonFormatTemplateWithAirdropAcceptance = "{\n  \"visible_dialogue\":\"接受这张交易卡，等待玩家最终确认\",\n  \"actions\":[\n    {\"action\":\"accept_item_airdrop\",\"parameters\":{\"request_id\":\"原样复制交易卡中的 UUID\"}}\n  ]\n}";
 
         public const string GoodwillPeacePolicyHeader = "动态和平策略（基于好感）：";
         public const string GoodwillPeacePolicyVeryLowLine1 =

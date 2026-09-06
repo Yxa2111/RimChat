@@ -103,7 +103,14 @@
             "ActionName": "request_item_airdrop",
             "Description": "根据需求检索真实 ThingDef，并在玩家确认后通过原版空投即时发送物资（无需等待、不消耗额外回合）。",
             "Parameters": "need（string，必填；若玩家明确指定了数量，need 中必须包含该数量，如 '1000个原木'、'50钢铁'），payment_items（array，必填；每项含 item/count，item 优先使用 defName，label 仅备用），scenario（string，可选：trade/ransom/general），constraints（string，可选），budget_silver（int，可选，仅审计）",
-            "Requirement": "need、payment_items 必填；need 必须忠实反映玩家需求——当玩家消息中包含明确数量（如“1000原木”“50个钢铁”）时，need 字段必须携带该数量信息（格式：数字+物品名，如 '1000原木'），禁止忽略玩家指定的数量；预算由 payment_items 按市场价（默认取 ThingDef.BaseMarketValue，定价下限 0.01；保留既有倍率：无 tradeTags 时 x10，含 ExoticMisc 时 x2）求和后向下取整（Floor）自动派生，budget_silver 若提供仅用于审计且不参与执行。payment_items 必须是可从通电轨道信标范围扣除的真实物资；item 优先 defName，label 仅在可唯一匹配时可用。若玩家给出空投信息卡字段，视为参考报价（可拒绝、可重报价、可改参数执行）；若仅重报价且不执行动作，使用固定句式“重报价: item=<defName> count=<int> silver=<int> reason=<text>”或“Counteroffer: item=<defName> count=<int> silver=<int> reason=<text>”。空投为即时呼叫，AI 可直接执行。任一条件不满足必须 fail-fast 并给出原因。",
+            "Requirement": "need、payment_items 必填；need 必须忠实反映玩家需求——当玩家消息中包含明确数量（如“1000原木”“50个钢铁”）时，need 字段必须携带该数量信息（格式：数字+物品名，如 '1000原木'），禁止忽略玩家指定的数量；预算由 payment_items 按市场价（默认取 ThingDef.BaseMarketValue，定价下限 0.01；保留既有倍率：无 tradeTags 时 x10，含 ExoticMisc 时 x2）求和后向下取整（Floor）自动派生，budget_silver 若提供仅用于审计且不参与执行。payment_items 必须是可从通电轨道信标范围扣除的真实物资；item 优先 defName，label 仅在可唯一匹配时可用。若玩家给出空投交易卡字段，视为不可变报价：派系可以拒绝或重报价；接受现有卡必须调用 accept_item_airdrop 并原样复制 request_id，不能用 request_item_airdrop 改参数绕过。若要修改物资、数量或付款，等待玩家编辑并提交新的修订卡；若仅重报价且不执行动作，使用自然对白明确说出物资、数量、银币价格和简短原因。空投为即时呼叫，但仍须经过玩家最终确认。任一条件不满足必须 fail-fast 并给出原因。",
+            "IsEnabled": true
+        },
+        {
+            "ActionName": "accept_item_airdrop",
+            "Description": "接受当前待处理的空投交易卡，严格按交易卡报价执行。这是派系先拒绝或重报价后改变主意时接受原请求的唯一动作。",
+            "Parameters": "request_id（string，必填；必须原样复制 [AirdropTradeCardReference] 中的 request_id）",
+            "Requirement": "仅在存在当前 [AirdropTradeCardReference] 时使用。request_id 缺失、错误、已取消、已完成或已被修订时必须失败。接受完整报价，不得改物资、数量、付款或场景；有修改需求时等待玩家重新提交修订卡。交易卡存在时禁止改用 request_item_airdrop。",
             "IsEnabled": true
         },
         {

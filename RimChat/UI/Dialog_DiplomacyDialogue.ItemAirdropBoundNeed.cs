@@ -15,8 +15,10 @@ namespace RimChat.UI
     {
         private static bool TryInjectPendingAirdropTradeCardMetadata(
             List<AIAction> actions,
-            FactionDialogueSession currentSession)
+            FactionDialogueSession currentSession,
+            out string failureMessage)
         {
+            failureMessage = string.Empty;
             if (actions == null || actions.Count == 0)
             {
                 return true;
@@ -24,7 +26,7 @@ namespace RimChat.UI
 
             for (int i = 0; i < actions.Count; i++)
             {
-                if (!TryInjectPendingAirdropTradeCardMetadata(actions[i], currentSession, out string _))
+                if (!TryInjectPendingAirdropTradeCardMetadata(actions[i], currentSession, out failureMessage))
                 {
                     return false;
                 }
@@ -48,6 +50,25 @@ namespace RimChat.UI
             if (action.Parameters == null)
             {
                 action.Parameters = new Dictionary<string, object>(StringComparer.Ordinal);
+            }
+
+            // A live trade card can only be fulfilled by an action expanded from
+            // accept_item_airdrop. Delayed-intent recovery must not turn a stale
+            // free-form request_item_airdrop back into an executable request.
+            if (currentSession?.hasPendingAirdropTradeCardReference == true)
+            {
+                if (!HasAirdropTradeCardRequestId(action))
+                {
+                    failureMessage = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
+                    return false;
+                }
+
+                string requestId = GetAirdropTradeCardRequestId(action);
+                if (!currentSession.IsCurrentAirdropTradeCardRequest(requestId))
+                {
+                    failureMessage = "RimChat_ItemAirdropAcceptRequestExpired".Translate(requestId).ToString();
+                    return false;
+                }
             }
 
             return TryInjectPendingAirdropTradeCardMetadata(action.Parameters, currentSession, out failureMessage);

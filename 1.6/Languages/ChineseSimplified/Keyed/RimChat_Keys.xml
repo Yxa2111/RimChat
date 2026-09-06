@@ -783,12 +783,27 @@
     <RimChat_AirdropSubmitInsufficientOffer>出价物资 {0} 库存不足。请求数量：{1}，可用数量：{2}。</RimChat_AirdropSubmitInsufficientOffer>
     <RimChat_AirdropTradeCard_NoSuggestions>未找到匹配的物品。</RimChat_AirdropTradeCard_NoSuggestions>
     <RimChat_AirdropTradeCard_BubbleTitle>【空投物资请求】</RimChat_AirdropTradeCard_BubbleTitle>
+    <RimChat_AirdropTradeCard_EditRequest>编辑请求</RimChat_AirdropTradeCard_EditRequest>
+    <RimChat_AirdropTradeCard_CancelRequest>取消请求</RimChat_AirdropTradeCard_CancelRequest>
     <RimChat_AirdropTradeCard_BubbleShippingSummary>运费：{0} 仓 / {1} 银 | 最终报价：{2}</RimChat_AirdropTradeCard_BubbleShippingSummary>
     <RimChat_AirdropTradeCard_PayLabel>支付</RimChat_AirdropTradeCard_PayLabel>
     <RimChat_AirdropTradeCard_GainLabel>获得</RimChat_AirdropTradeCard_GainLabel>
     <RimChat_AirdropTradeCard_CountLabel>数量</RimChat_AirdropTradeCard_CountLabel>
     <RimChat_AirdropTradeCard_TotalPriceLabel>总价</RimChat_AirdropTradeCard_TotalPriceLabel>
     <RimChat_AirdropTradeCard_ArrowRight>→</RimChat_AirdropTradeCard_ArrowRight>
+    <RimChat_ItemAirdropAcceptRequestIdRequired>接受空投必须使用当前交易卡提供的准确 request_id。</RimChat_ItemAirdropAcceptRequestIdRequired>
+    <RimChat_ItemAirdropAcceptNoPendingRequest>当前没有可接受的空投交易卡。</RimChat_ItemAirdropAcceptNoPendingRequest>
+    <RimChat_ItemAirdropAcceptAlreadyCompleted>空投请求 {0} 已完成。</RimChat_ItemAirdropAcceptAlreadyCompleted>
+    <RimChat_ItemAirdropAcceptRequestIdMismatch>空投请求 ID {0} 与当前交易卡不匹配。</RimChat_ItemAirdropAcceptRequestIdMismatch>
+    <RimChat_ItemAirdropAcceptRequestExpired>空投请求 {0} 已过期、取消、完成或被修订。</RimChat_ItemAirdropAcceptRequestExpired>
+    <RimChat_ItemAirdropAcceptRequestInProgress>空投请求 {0} 已在准备或等待确认中。</RimChat_ItemAirdropAcceptRequestInProgress>
+    <RimChat_ItemAirdropAcceptTermsInvalid>空投请求 {0} 的交易卡条款不完整。</RimChat_ItemAirdropAcceptTermsInvalid>
+    <RimChat_ItemAirdropAcceptTermsChanged>空投请求准备期间条款发生变化：期望提供 {0} x{1}，换取 {2} x{3}。本次未执行。</RimChat_ItemAirdropAcceptTermsChanged>
+    <RimChat_ItemAirdropAcceptConflict>回复中包含冲突的空投动作，请只选择一个请求决定。</RimChat_ItemAirdropAcceptConflict>
+    <RimChat_ItemAirdropAcceptInvalidRequest>无法验证这次空投接受请求。</RimChat_ItemAirdropAcceptInvalidRequest>
+    <RimChat_ItemAirdropAcceptFactionMismatch>空投请求 {0} 属于其他派系通信，不能在当前对话中接受。</RimChat_ItemAirdropAcceptFactionMismatch>
+    <RimChat_ItemAirdropAcceptUseRequestId>这张交易卡必须使用 accept_item_airdrop 和准确的 request_id 接受。</RimChat_ItemAirdropAcceptUseRequestId>
+    <RimChat_ItemAirdropTradeCardCancelled>已取消待处理的空投请求。</RimChat_ItemAirdropTradeCardCancelled>
     <RimChat_Search>搜索：</RimChat_Search>
     <RimChat_Loading>加载中...</RimChat_Loading>
     <RimChat_ModelList_Loading>正在加载模型列表...</RimChat_ModelList_Loading>

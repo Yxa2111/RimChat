@@ -19,6 +19,18 @@ namespace RimChat.Memory
         Cancelled = 6
     }
 
+    public enum AirdropTradeCardStatus
+    {
+        None = 0,
+        Pending = 1,
+        Preparing = 2,
+        AwaitingPlayerConfirm = 3,
+        Executing = 4,
+        Completed = 5,
+        Cancelled = 6,
+        Superseded = 7
+    }
+
     /// <summary>/// store单个factiondialoguesession的数据
  ///</summary>
     public class FactionDialogueSession : IExposable
@@ -50,6 +62,12 @@ namespace RimChat.Memory
         public int airdropRequestGeneration = 0;
         public AirdropExecutionStage airdropExecutionStage = AirdropExecutionStage.Idle;
         public int airdropPreparedAwaitingConfirmTick = 0;
+        // Business request state for the current in-session airdrop trade card.
+        // This is deliberately separate from pendingAirdropRequestId, which is the async transport request id.
+        public string pendingAirdropTradeCardRequestId = string.Empty;
+        public AirdropTradeCardStatus pendingAirdropTradeCardStatus = AirdropTradeCardStatus.None;
+        public Dictionary<string, AirdropTradeCardStatus> airdropTradeCardStatusByRequestId =
+            new Dictionary<string, AirdropTradeCardStatus>(StringComparer.Ordinal);
         public bool isWaitingForRansomTargetSelection = false;
         public int boundRansomTargetPawnLoadId = 0;
         public string boundRansomTargetFactionId = string.Empty;
@@ -200,7 +218,8 @@ namespace RimChat.Memory
             int offerCount,
             float offerUnitPrice,
             float offerTotalPrice,
-            Pawn speakerPawn = null)
+            Pawn speakerPawn = null,
+            string requestId = null)
         {
             var msg = new DialogueMessageData
             {
@@ -221,7 +240,8 @@ namespace RimChat.Memory
                 offerLabel,
                 offerCount,
                 offerUnitPrice,
-                offerTotalPrice);
+                offerTotalPrice,
+                requestId);
             msg.SetSpeakerPawn(speakerPawn);
             msg.SetTimestampFromCurrentGameTick();
             messages.Add(msg);
@@ -289,9 +309,26 @@ namespace RimChat.Memory
             int paymentItemCount,
             string scenario,
             int shippingPodCount = 0,
-            int shippingCostSilver = 0)
+            int shippingCostSilver = 0,
+            string requestId = null)
         {
+            string normalizedRequestId = string.IsNullOrWhiteSpace(requestId)
+                ? Guid.NewGuid().ToString("N")
+                : requestId.Trim();
+            if (airdropTradeCardStatusByRequestId == null)
+            {
+                airdropTradeCardStatusByRequestId = new Dictionary<string, AirdropTradeCardStatus>(StringComparer.Ordinal);
+            }
+            if (!string.IsNullOrWhiteSpace(pendingAirdropTradeCardRequestId) &&
+                !string.Equals(pendingAirdropTradeCardRequestId, normalizedRequestId, StringComparison.Ordinal))
+            {
+                SetAirdropTradeCardStatus(pendingAirdropTradeCardRequestId, AirdropTradeCardStatus.Superseded);
+            }
+
             hasPendingAirdropTradeCardReference = true;
+            pendingAirdropTradeCardRequestId = normalizedRequestId;
+            pendingAirdropTradeCardStatus = AirdropTradeCardStatus.Pending;
+            airdropTradeCardStatusByRequestId[normalizedRequestId] = AirdropTradeCardStatus.Pending;
             pendingAirdropTradeCardNeed = need ?? string.Empty;
             pendingAirdropTradeCardNeedDefName = needDefName ?? string.Empty;
             pendingAirdropTradeCardNeedLabel = needLabel ?? string.Empty;
@@ -306,9 +343,63 @@ namespace RimChat.Memory
             pendingAirdropTradeCardShippingCost = Math.Max(0, shippingCostSilver);
         }
 
+        public void SetAirdropTradeCardStatus(string requestId, AirdropTradeCardStatus status)
+        {
+            string normalizedRequestId = requestId?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedRequestId))
+            {
+                return;
+            }
+
+            if (airdropTradeCardStatusByRequestId == null)
+            {
+                airdropTradeCardStatusByRequestId = new Dictionary<string, AirdropTradeCardStatus>(StringComparer.Ordinal);
+            }
+
+            if (airdropTradeCardStatusByRequestId.TryGetValue(normalizedRequestId, out AirdropTradeCardStatus previousStatus) &&
+                (previousStatus == AirdropTradeCardStatus.Completed ||
+                 previousStatus == AirdropTradeCardStatus.Cancelled ||
+                 previousStatus == AirdropTradeCardStatus.Superseded) &&
+                previousStatus != status)
+            {
+                return;
+            }
+
+            airdropTradeCardStatusByRequestId[normalizedRequestId] = status;
+            if (string.Equals(pendingAirdropTradeCardRequestId, normalizedRequestId, StringComparison.Ordinal))
+            {
+                pendingAirdropTradeCardStatus = status;
+            }
+        }
+
+        public bool TryGetAirdropTradeCardStatus(string requestId, out AirdropTradeCardStatus status)
+        {
+            status = AirdropTradeCardStatus.None;
+            string normalizedRequestId = requestId?.Trim() ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(normalizedRequestId) &&
+                   airdropTradeCardStatusByRequestId != null &&
+                   airdropTradeCardStatusByRequestId.TryGetValue(normalizedRequestId, out status);
+        }
+
+        public bool IsCurrentAirdropTradeCardRequest(string requestId)
+        {
+            return hasPendingAirdropTradeCardReference &&
+                   !string.IsNullOrWhiteSpace(pendingAirdropTradeCardRequestId) &&
+                   string.Equals(pendingAirdropTradeCardRequestId, requestId?.Trim(), StringComparison.Ordinal);
+        }
+
         public void ClearPendingAirdropTradeCardReference()
         {
+            if (!string.IsNullOrWhiteSpace(pendingAirdropTradeCardRequestId) &&
+                pendingAirdropTradeCardStatus != AirdropTradeCardStatus.Completed &&
+                pendingAirdropTradeCardStatus != AirdropTradeCardStatus.Superseded &&
+                pendingAirdropTradeCardStatus != AirdropTradeCardStatus.Cancelled)
+            {
+                SetAirdropTradeCardStatus(pendingAirdropTradeCardRequestId, AirdropTradeCardStatus.Cancelled);
+            }
             hasPendingAirdropTradeCardReference = false;
+            pendingAirdropTradeCardRequestId = string.Empty;
+            pendingAirdropTradeCardStatus = AirdropTradeCardStatus.None;
             pendingAirdropTradeCardNeed = string.Empty;
             pendingAirdropTradeCardNeedDefName = string.Empty;
             pendingAirdropTradeCardNeedLabel = string.Empty;
@@ -454,6 +545,8 @@ namespace RimChat.Memory
 
             referenceBlock =
                 "[AirdropTradeCardReference]\n" +
+                $"request_id: {pendingAirdropTradeCardRequestId}\n" +
+                $"status: {pendingAirdropTradeCardStatus}\n" +
                 $"need: {pendingAirdropTradeCardNeed}\n" +
                 $"need_def: {needDefName}\n" +
                 $"need_label: {pendingAirdropTradeCardNeedLabel}\n" +
@@ -477,7 +570,8 @@ namespace RimChat.Memory
                 "Your profit increases when the need items have higher market value. " +
                 "The player loses more when they offer higher-value items. " +
                 "You may accept the trade if the offer is fair or above market value (emergency premium is acceptable). " +
-                "Reject or counter-offer if the player's offer is below market value.\n" +
+                "Reject or counter-offer if the player's offer is below market value. " +
+                "To accept this exact request, call accept_item_airdrop with the exact request_id above; do not call request_item_airdrop directly and do not change any term.\n" +
                 "[/AirdropHiddenContext]\n" +
                 "[/AirdropTradeCardReference]";
             return true;
@@ -889,6 +983,7 @@ namespace RimChat.Memory
         public int airdropOfferCount;
         public float airdropOfferUnitPrice;
         public float airdropOfferTotalPrice;
+        public string airdropRequestId;
 
         public DialogueMessageData()
         {
@@ -920,6 +1015,7 @@ namespace RimChat.Memory
             Scribe_Values.Look(ref airdropOfferCount, "airdropOfferCount", 0);
             Scribe_Values.Look(ref airdropOfferUnitPrice, "airdropOfferUnitPrice", 0f);
             Scribe_Values.Look(ref airdropOfferTotalPrice, "airdropOfferTotalPrice", 0f);
+            Scribe_Values.Look(ref airdropRequestId, "airdropRequestId", string.Empty);
 
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {
@@ -967,7 +1063,8 @@ namespace RimChat.Memory
             string offerLabel,
             int offerCount,
             float offerUnitPrice,
-            float offerTotalPrice)
+            float offerTotalPrice,
+            string requestId = null)
         {
             messageType = DialogueMessageType.AirdropTradeCard;
             airdropNeedDefName = needDefName ?? string.Empty;
@@ -982,6 +1079,7 @@ namespace RimChat.Memory
             airdropOfferCount = Math.Max(0, offerCount);
             airdropOfferUnitPrice = Math.Max(0f, offerUnitPrice);
             airdropOfferTotalPrice = Math.Max(0f, offerTotalPrice);
+            airdropRequestId = requestId ?? string.Empty;
         }
 
         public void SetSpeakerPawn(Pawn pawn)

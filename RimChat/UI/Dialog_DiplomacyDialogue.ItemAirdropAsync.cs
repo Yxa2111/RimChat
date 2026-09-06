@@ -72,7 +72,7 @@ namespace RimChat.UI
             int expectedGeneration,
             GameAIInterface.APIResult prepareResult)
         {
-            if (!IsAirdropAsyncContextValid(currentSession, currentFaction, lease, requestContext, expectedGeneration))
+            if (!IsAirdropAsyncContextValid(currentSession, currentFaction, lease, requestContext, sourceAction, expectedGeneration))
             {
                 Log.Warning($"[RimChat] AirdropStalePendingBlocked: requestId={lease?.RequestId ?? "none"},stage={currentSession?.airdropExecutionStage.ToString() ?? "null"},expectedGeneration={expectedGeneration},actualGeneration={currentSession?.airdropRequestGeneration ?? -1},faction={currentFaction?.Name ?? "null"}");
                 return;
@@ -82,7 +82,8 @@ namespace RimChat.UI
 
             if (prepareResult == null)
             {
-                ResetAirdropConfirmationRuntime(currentSession, "prepareResult=null", true, true);
+                ResetAirdropConfirmationRuntime(currentSession, "prepareResult=null", true, false);
+                MarkAirdropTradeCardFailed(sourceAction, currentSession);
                 TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Failed, "prepareResult=null");
                 currentSession.AddMessage(
                     "System",
@@ -98,7 +99,8 @@ namespace RimChat.UI
                 string reason = string.IsNullOrWhiteSpace(prepareResult.Message)
                     ? "RimChat_Unknown".Translate().ToString()
                     : prepareResult.Message;
-                ResetAirdropConfirmationRuntime(currentSession, "async_prepare_failed", true, true);
+                ResetAirdropConfirmationRuntime(currentSession, "async_prepare_failed", true, false);
+                MarkAirdropTradeCardFailed(sourceAction, currentSession);
                 TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Failed, reason);
                 currentSession.AddMessage(
                     "System",
@@ -134,7 +136,22 @@ namespace RimChat.UI
             {
                 ClearPendingAirdropDialogState("async_prepare_new_confirmation", false);
                 currentSession?.ClearPendingAirdropExecutionState();
-                ResetAirdropConfirmationRuntime(currentSession, "async_prepared_trade_ready", true, true);
+                if (!TryValidatePreparedTradeAgainstAirdropTradeCard(sourceAction, currentSession, preparedTrade, out string termsFailure))
+                {
+                    ResetAirdropConfirmationRuntime(currentSession, "async_prepared_trade_terms_mismatch", true, false);
+                    MarkAirdropTradeCardFailed(sourceAction, currentSession);
+                    TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Failed, termsFailure);
+                    currentSession.AddMessage(
+                        "System",
+                        "RimChat_ItemAirdropCommitFailedSystem".Translate(termsFailure),
+                        false,
+                        DialogueMessageType.System);
+                    SaveFactionMemory(currentSession, currentFaction);
+                    return;
+                }
+
+                ResetAirdropConfirmationRuntime(currentSession, "async_prepared_trade_ready", true, false);
+                MarkAirdropTradeCardAwaitingConfirm(sourceAction, currentSession);
                 TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.PreparedAwaitingConfirm, preparedTrade.SelectedDefName ?? "prepared_trade");
                 ShowAirdropTradeConfirmationDialog(currentSession, currentFaction, preparedTrade, null, null);
                 SaveFactionMemory(currentSession, currentFaction);
@@ -146,6 +163,7 @@ namespace RimChat.UI
             Faction currentFaction,
             DialogueRequestLease lease,
             DialogueRuntimeContext requestContext,
+            AIAction sourceAction,
             int expectedGeneration)
         {
             if (currentSession == null || currentFaction == null || currentFaction.defeated || lease == null)
@@ -170,6 +188,14 @@ namespace RimChat.UI
             if (!string.Equals(currentSession.pendingAirdropRequestId, requestId, StringComparison.Ordinal))
             {
                 Log.Warning($"[RimChat] AirdropAsyncContextInvalid: reason=request_id_mismatch sessionId={currentSession.pendingAirdropRequestId} leaseId={requestId}");
+                return false;
+            }
+
+            string tradeCardRequestId = GetAirdropTradeCardRequestId(sourceAction);
+            if (!string.IsNullOrWhiteSpace(tradeCardRequestId) &&
+                !currentSession.IsCurrentAirdropTradeCardRequest(tradeCardRequestId))
+            {
+                Log.Warning($"[RimChat] AirdropAsyncContextInvalid: reason=trade_card_request_id_mismatch cardId={tradeCardRequestId},currentCardId={currentSession.pendingAirdropTradeCardRequestId}");
                 return false;
             }
 

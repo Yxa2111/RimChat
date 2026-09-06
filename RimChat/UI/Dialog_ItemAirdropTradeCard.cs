@@ -15,6 +15,7 @@ namespace RimChat.UI
         private readonly FactionDialogueSession session;
         private readonly Faction faction;
         private readonly Action<ItemAirdropTradeCardPayload> onSubmitted;
+        private readonly ItemAirdropTradeCardPayload initialPayload;
 
         private readonly SearchStateManager searchState = new SearchStateManager();
         private readonly List<InventoryDisplayEntry> inventoryItems = new List<InventoryDisplayEntry>();
@@ -49,11 +50,13 @@ namespace RimChat.UI
         public Dialog_ItemAirdropTradeCard(
             FactionDialogueSession session,
             Faction faction,
-            Action<ItemAirdropTradeCardPayload> onSubmitted)
+            Action<ItemAirdropTradeCardPayload> onSubmitted,
+            ItemAirdropTradeCardPayload initialPayload = null)
         {
             this.session = session;
             this.faction = faction;
             this.onSubmitted = onSubmitted;
+            this.initialPayload = initialPayload;
             closeOnClickedOutside = true;
             absorbInputAroundWindow = true;
             doCloseX = true;
@@ -67,8 +70,39 @@ namespace RimChat.UI
         {
             base.PreOpen();
             ApplyPendingInventoryLoadIfReady();
-            ApplyCounterofferDefaults();
+            ApplyInitialPayload();
+            if (initialPayload == null)
+            {
+                ApplyCounterofferDefaults();
+            }
             EnsureOfferSelectionState();
+        }
+
+        private void ApplyInitialPayload()
+        {
+            if (initialPayload == null)
+            {
+                return;
+            }
+
+            requestedCountText = Math.Max(1, initialPayload.RequestedCount).ToString(CultureInfo.InvariantCulture);
+            offerCountText = Math.Max(1, initialPayload.OfferItemCount).ToString(CultureInfo.InvariantCulture);
+            selectedOfferDefName = initialPayload.OfferItemDefName ?? string.Empty;
+            selectedOfferLabel = initialPayload.OfferItemLabel ?? string.Empty;
+            needSearchText = initialPayload.NeedSearchText;
+            if (string.IsNullOrWhiteSpace(needSearchText))
+            {
+                needSearchText = initialPayload.NeedLabel ?? initialPayload.NeedDefName ?? string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(initialPayload.NeedDefName))
+            {
+                ThingDef needDef = DefDatabase<ThingDef>.GetNamedSilentFail(initialPayload.NeedDefName);
+                if (needDef != null)
+                {
+                    BindNeedRecord(ThingDefRecord.From(needDef));
+                }
+            }
         }
 
         private void ApplyCounterofferDefaults()
@@ -844,7 +878,9 @@ namespace RimChat.UI
                 OfferUnitPrice = selectedOfferUnitPrice,
                 OfferTotalPrice = ComputeOfferTotal(),
                 ShippingPodCount = podCount,
-                ShippingCostSilver = shippingCost
+                ShippingCostSilver = shippingCost,
+                RequestId = Guid.NewGuid().ToString("N"),
+                IsRevision = initialPayload != null && initialPayload.IsRevision
             };
 
             onSubmitted?.Invoke(payload);

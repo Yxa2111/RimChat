@@ -89,6 +89,8 @@ namespace RimChat.UI
                 TryMapAirdropPendingSelectionFollowup(response, currentSession, currentSession.pendingDelayedActionIntent, playerMessage, assistantRound);
             }
 
+            TryExpandAirdropAcceptanceActions(response, currentSession);
+
             RemoveDelayedActionsWithMissingRequiredParameters(response, currentSession, assistantRound);
 
             if (!HasDelayedActions(response.Actions))
@@ -98,13 +100,15 @@ namespace RimChat.UI
 
             ApplyForcedSendInfoDirective(response, playerMessage);
             RemoveDelayedActionsBlockedByShortDedupe(response, currentSession, assistantRound);
-            if (!TryInjectPendingAirdropTradeCardMetadata(response.Actions, currentSession))
+            if (!TryInjectPendingAirdropTradeCardMetadata(response.Actions, currentSession, out string airdropMetadataFailure))
             {
                 response.Actions = response.Actions
                     .Where(action => !IsRequestItemAirdropAction(action))
                     .ToList();
 
-                string failureMessage = BuildPendingAirdropTradeCardStateLostMessage();
+                string failureMessage = string.IsNullOrWhiteSpace(airdropMetadataFailure)
+                    ? BuildPendingAirdropTradeCardStateLostMessage()
+                    : airdropMetadataFailure;
                 response.DialogueText = string.IsNullOrWhiteSpace(response.DialogueText)
                     ? failureMessage
                     : $"{response.DialogueText}\n\n{failureMessage}";
@@ -444,6 +448,29 @@ namespace RimChat.UI
                 return;
             }
 
+            if (string.Equals(baseIntent.ActionType, AIActionNames.RequestItemAirdrop, StringComparison.Ordinal) &&
+                currentSession.hasPendingAirdropTradeCardReference)
+            {
+                string requestId = GetAirdropTradeCardRequestId(baseIntent.Parameters);
+                if (!currentSession.IsCurrentAirdropTradeCardRequest(requestId))
+                {
+                    currentSession.pendingDelayedActionIntent = null;
+                    response.DialogueText = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(baseIntent.Parameters)) &&
+                    ContainsAnyHint(normalizedPlayer, ConfirmationHints))
+                {
+                    // Natural-language agreement never promotes a pending
+                    // card intent into an acceptance action. The faction must
+                    // emit accept_item_airdrop again with the exact id.
+                    currentSession.pendingDelayedActionIntent = null;
+                    response.DialogueText = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
+                    return;
+                }
+            }
+
             if (TryMapAirdropPendingSelectionFollowup(response, currentSession, baseIntent, playerMessage, assistantRound))
             {
                 return;
@@ -546,6 +573,14 @@ namespace RimChat.UI
                 return false;
             }
 
+            // A trade-card acceptance is an immutable quote. Numeric follow-ups
+            // may revise a legacy free-form request, but must never rewrite the
+            // payment terms of a request-id-bound card.
+            if (!string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(baseIntent.Parameters)))
+            {
+                return false;
+            }
+
             return TryParseSingleAirdropAmountShorthand(playerMessage, out amount);
         }
 
@@ -633,6 +668,18 @@ namespace RimChat.UI
             if (response == null || currentSession == null || baseIntent == null)
             {
                 return;
+            }
+
+            if (string.Equals(baseIntent.ActionType, AIActionNames.RequestItemAirdrop, StringComparison.Ordinal) &&
+                currentSession.hasPendingAirdropTradeCardReference)
+            {
+                string requestId = GetAirdropTradeCardRequestId(baseIntent.Parameters);
+                if (!currentSession.IsCurrentAirdropTradeCardRequest(requestId))
+                {
+                    currentSession.pendingDelayedActionIntent = null;
+                    response.DialogueText = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
+                    return;
+                }
             }
 
             string missingParameter = GetMissingRequiredParameter(baseIntent.ActionType, baseIntent.Parameters);
