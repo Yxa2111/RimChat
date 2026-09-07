@@ -319,45 +319,76 @@ namespace RimChat.UI
 
         private static IEnumerable<ThingCategoryDef> GetTopLevelBrowserCategories(ThingDef def)
         {
-            if (def?.thingCategories == null) yield break;
             var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (ThingCategoryDef directCategory in def.thingCategories)
+            if (def?.thingCategories != null)
             {
-                ThingCategoryDef current = directCategory;
-                var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                while (current?.parent != null &&
-                       !string.Equals(current.parent.defName, "Root", StringComparison.OrdinalIgnoreCase) &&
-                       visited.Add(current.defName ?? string.Empty))
+                foreach (ThingCategoryDef directCategory in def.thingCategories)
                 {
-                    current = current.parent;
-                }
+                    ThingCategoryDef current = directCategory;
+                    var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (current?.parent != null &&
+                           !string.Equals(current.parent.defName, "Root", StringComparison.OrdinalIgnoreCase) &&
+                           visited.Add(current.defName ?? string.Empty))
+                    {
+                        current = current.parent;
+                    }
 
-                if (current != null && !string.Equals(current.defName, "Root", StringComparison.OrdinalIgnoreCase) &&
-                    yielded.Add(current.defName ?? string.Empty))
-                {
-                    yield return current;
+                    if (current != null && !string.Equals(current.defName, "Root", StringComparison.OrdinalIgnoreCase) &&
+                        yielded.Add(current.defName ?? string.Empty))
+                    {
+                        yield return current;
+                    }
                 }
+            }
+
+            if (yielded.Count > 0) yield break;
+
+            ThingCategoryDef fallback = ResolveFallbackBrowserCategory(def);
+            if (fallback != null)
+            {
+                yield return fallback;
             }
         }
 
         private static bool IsWithinBrowserCategory(ThingDef def, ThingCategoryDef selectedCategory)
         {
             if (selectedCategory == null) return true;
-            if (def?.thingCategories == null) return false;
-            foreach (ThingCategoryDef directCategory in def.thingCategories)
+            return GetTopLevelBrowserCategories(def).Any(category =>
+                string.Equals(category.defName, selectedCategory.defName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static ThingCategoryDef ResolveFallbackBrowserCategory(ThingDef def)
+        {
+            if (def == null) return null;
+
+            string categoryDefName;
+            if (def.IsNutritionGivingIngestible)
             {
-                var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                for (ThingCategoryDef current = directCategory;
-                     current != null && visited.Add(current.defName ?? string.Empty);
-                     current = current.parent)
-                {
-                    if (string.Equals(current.defName, selectedCategory.defName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
+                categoryDefName = "Foods";
             }
-            return false;
+            else if (def.IsWeapon)
+            {
+                categoryDefName = "Weapons";
+            }
+            else if (def.IsApparel)
+            {
+                categoryDefName = "Apparel";
+            }
+            else if (def.stuffProps != null)
+            {
+                categoryDefName = "ResourcesRaw";
+            }
+            else if (def.IsMedicine || def.IsDrug)
+            {
+                categoryDefName = "Manufactured";
+            }
+            else
+            {
+                categoryDefName = "Items";
+            }
+
+            return DefDatabase<ThingCategoryDef>.GetNamedSilentFail(categoryDefName) ??
+                   DefDatabase<ThingCategoryDef>.GetNamedSilentFail("Items");
         }
     }
 }
