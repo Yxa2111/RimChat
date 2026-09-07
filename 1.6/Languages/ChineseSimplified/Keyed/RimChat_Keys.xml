@@ -755,7 +755,7 @@
     <RimChat_AirdropTradeCard_NeedItemCard>需求物资</RimChat_AirdropTradeCard_NeedItemCard>
     <RimChat_AirdropTradeCard_OfferItemCard>出价物资</RimChat_AirdropTradeCard_OfferItemCard>
     <RimChat_AirdropTradeCard_NoNeedItemBound>未绑定需求物资，请搜索并选择。</RimChat_AirdropTradeCard_NoNeedItemBound>
-    <RimChat_AirdropTradeCard_TitleHint>选择物资和数量并点击“添加”，可重复添加交易双方的多种物资。</RimChat_AirdropTradeCard_TitleHint>
+    <RimChat_AirdropTradeCard_TitleHint>左右两边都可以按类别浏览或搜索；设置数量后，可连续添加多种物资。</RimChat_AirdropTradeCard_TitleHint>
     <RimChat_AirdropTradeCard_NeedBindingMissing>尚未精确绑定需求物资，当前不能提交。</RimChat_AirdropTradeCard_NeedBindingMissing>
     <RimChat_AirdropTradeCard_NeedBindingReady>已绑定：{0}（{1}）</RimChat_AirdropTradeCard_NeedBindingReady>
     <RimChat_Price>价格</RimChat_Price>
@@ -2812,6 +2812,10 @@ ID：{5}
     <RimChat_AirdropTradeCard_MarketValueTotal>市场价总计（未计倍率）：{0}</RimChat_AirdropTradeCard_MarketValueTotal>
     <RimChat_AirdropTradeCard_MarketComparison>市场价：需求 {0}｜出价 {1}</RimChat_AirdropTradeCard_MarketComparison>
     <RimChat_AirdropTradeCard_MarketDifference>差额（出价－需求）：{0}｜比例：{1}</RimChat_AirdropTradeCard_MarketDifference>
+    <RimChat_AirdropTradeCard_AllCategories>全部类别</RimChat_AirdropTradeCard_AllCategories>
+    <RimChat_AirdropTradeCard_NoNeedSelection>尚未选择需求物资</RimChat_AirdropTradeCard_NoNeedSelection>
+    <RimChat_AirdropTradeCard_NeedBrowserPrice>市场价 {0}</RimChat_AirdropTradeCard_NeedBrowserPrice>
+    <RimChat_AirdropTradeCard_OfferBrowserDetail>库存 {0}｜市场价 {1}｜出价 {2}</RimChat_AirdropTradeCard_OfferBrowserDetail>
     <RimChat_AirdropBasketSummary>派系交付：{0}。玩家支付：{1}。</RimChat_AirdropBasketSummary>
     <RimChat_AirdropBasketTermsChanged>准备结果与本请求的物资清单不一致，未扣除或投放任何物资。</RimChat_AirdropBasketTermsChanged>
     <RimChat_ItemAirdropArrivedMultiBody>{0} 已通过空投舱交付：{1}。付款价值：{2} 银币。</RimChat_ItemAirdropArrivedMultiBody>

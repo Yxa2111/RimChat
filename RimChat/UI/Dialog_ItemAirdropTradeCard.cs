@@ -43,9 +43,8 @@ namespace RimChat.UI
         private bool inventoryLoadCompleted;
 
         private const float TitleHeight = 62f;
-        private const float SearchAreaHeight = 76f;
         private const float SuggestionRowHeight = 38f;
-        private const float FooterHeight = 164f;
+        private const float FooterHeight = 130f;
         private const float Padding = 12f;
         private const float InventoryRowHeight = 46f;
         private const float CardImageSize = 54f;
@@ -80,6 +79,7 @@ namespace RimChat.UI
                 ApplyCounterofferDefaults();
             }
             EnsureOfferSelectionState();
+            EnsureNeedBrowserData();
         }
 
         private void ApplyInitialPayload()
@@ -250,16 +250,13 @@ namespace RimChat.UI
         private void ApplyInventoryFilter()
         {
             filteredInventoryItems.Clear();
-            if (string.IsNullOrWhiteSpace(inventorySearchText))
-            {
-                filteredInventoryItems.AddRange(inventoryItems);
-                return;
-            }
-
             string normalized = inventorySearchText.Trim().ToLowerInvariant();
-            filteredInventoryItems.AddRange(inventoryItems.Where(item =>
-                item.Label.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                item.DefName.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0));
+            filteredInventoryItems.AddRange(inventoryItems
+                .Where(item => selectedOfferBrowserCategory == null ||
+                    IsWithinBrowserCategory(DefDatabase<ThingDef>.GetNamedSilentFail(item.DefName), selectedOfferBrowserCategory))
+                .Where(item => string.IsNullOrWhiteSpace(normalized) ||
+                    item.Label.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    item.DefName.IndexOf(normalized, StringComparison.OrdinalIgnoreCase) >= 0));
         }
 
         private static List<Thing> CollectBeaconTradeableThings(Map map)
@@ -281,26 +278,14 @@ namespace RimChat.UI
             DrawTitle(titleRect);
             y += TitleHeight + Padding;
 
-            Rect searchRect = new Rect(inRect.x, y, inRect.width, SearchAreaHeight);
-            DrawSearchArea(searchRect);
-            y += SearchAreaHeight + Padding;
-
-            if (showInlineSuggestions && searchState.Suggestions.Count > 0)
-            {
-                float suggestionHeight = SuggestionRowHeight * Math.Min(searchState.Suggestions.Count, 6);
-                Rect suggestionRect = new Rect(inRect.x, y, inRect.width, suggestionHeight);
-                DrawInlineSuggestionDropDown(suggestionRect);
-                y += suggestionHeight + Padding;
-            }
-
             float bodyHeight = inRect.height - (y - inRect.y) - FooterHeight - Padding;
-            float cardHeight = 150f;
+            float cardHeight = Mathf.Clamp(bodyHeight * 0.42f, 170f, 190f);
             Rect cardsRect = new Rect(inRect.x, y, inRect.width, cardHeight);
             DrawItemCards(cardsRect);
             y += cardHeight + Padding;
 
-            Rect inventoryRect = new Rect(inRect.x, y, inRect.width, Mathf.Max(140f, bodyHeight - cardHeight - Padding));
-            DrawInventoryPanel(inventoryRect);
+            Rect browsersRect = new Rect(inRect.x, y, inRect.width, Mathf.Max(170f, bodyHeight - cardHeight - Padding));
+            DrawDualItemBrowsers(browsersRect);
 
             Rect footerRect = new Rect(inRect.x, inRect.yMax - FooterHeight, inRect.width, FooterHeight);
             DrawFooter(footerRect);
@@ -668,17 +653,14 @@ namespace RimChat.UI
             Rect comparisonRect = new Rect(statRect.xMax + 12f, statRect.y, rect.xMax - statRect.xMax - 24f, statRect.height);
             DrawMarketValueComparisonBlock(comparisonRect);
 
-            float inputWidth = rect.width * 0.55f;
-            DrawFooterInputs(new Rect(rect.x + 12f, rect.y + 50f, inputWidth, 26f));
-
-            DrawTradeRulesInfo(new Rect(rect.x + 12f, rect.y + 82f, rect.width - 24f, 28f));
+            DrawTradeRulesInfo(new Rect(rect.x + 12f, rect.y + 50f, rect.width - 24f, 32f));
 
             string failReason = GetSubmitDisabledReason();
             if (!string.IsNullOrWhiteSpace(failReason))
             {
                 Text.Font = GameFont.Tiny;
                 GUI.color = new Color(0.9f, 0.74f, 0.32f);
-                Widgets.Label(new Rect(rect.x + 12f, rect.y + 114f, rect.width * 0.82f, 16f), failReason);
+                Widgets.Label(new Rect(rect.x + 12f, rect.y + 88f, rect.width * 0.58f, 16f), failReason);
                 GUI.color = Color.white;
                 Text.Font = GameFont.Small;
             }

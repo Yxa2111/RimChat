@@ -1112,7 +1112,7 @@
     <RimChat_AirdropTradeCard_NeedItemCard>Need Item</RimChat_AirdropTradeCard_NeedItemCard>
     <RimChat_AirdropTradeCard_OfferItemCard>Offer Item</RimChat_AirdropTradeCard_OfferItemCard>
     <RimChat_AirdropTradeCard_NoNeedItemBound>No need item bound. Search and select.</RimChat_AirdropTradeCard_NoNeedItemBound>
-    <RimChat_AirdropTradeCard_TitleHint>Select an item and quantity, click Add, then repeat to build both sides of the trade.</RimChat_AirdropTradeCard_TitleHint>
+    <RimChat_AirdropTradeCard_TitleHint>Browse or search both sides, choose a quantity, and add as many different items as needed.</RimChat_AirdropTradeCard_TitleHint>
     <RimChat_AirdropTradeCard_NeedBindingMissing>No exact need item is bound yet. Submission is blocked.</RimChat_AirdropTradeCard_NeedBindingMissing>
     <RimChat_AirdropTradeCard_NeedBindingReady>Bound: {0} ({1})</RimChat_AirdropTradeCard_NeedBindingReady>
     <RimChat_Price>Price</RimChat_Price>
@@ -2721,6 +2721,10 @@ Selected prisoners: {1}
     <RimChat_AirdropTradeCard_MarketValueTotal>Base market total (before multipliers): {0}</RimChat_AirdropTradeCard_MarketValueTotal>
     <RimChat_AirdropTradeCard_MarketComparison>Market value: need {0} | offer {1}</RimChat_AirdropTradeCard_MarketComparison>
     <RimChat_AirdropTradeCard_MarketDifference>Offer - need: {0} | ratio: {1}</RimChat_AirdropTradeCard_MarketDifference>
+    <RimChat_AirdropTradeCard_AllCategories>All categories</RimChat_AirdropTradeCard_AllCategories>
+    <RimChat_AirdropTradeCard_NoNeedSelection>No requested item selected</RimChat_AirdropTradeCard_NoNeedSelection>
+    <RimChat_AirdropTradeCard_NeedBrowserPrice>Market {0}</RimChat_AirdropTradeCard_NeedBrowserPrice>
+    <RimChat_AirdropTradeCard_OfferBrowserDetail>Available {0} | market {1} | offer {2}</RimChat_AirdropTradeCard_OfferBrowserDetail>
     <RimChat_AirdropBasketSummary>Faction delivers: {0}. Player pays: {1}.</RimChat_AirdropBasketSummary>
     <RimChat_AirdropBasketTermsChanged>The prepared item lists no longer match this request. Nothing was charged or delivered.</RimChat_AirdropBasketTermsChanged>
     <RimChat_ItemAirdropArrivedMultiBody>{0} delivered the following items by drop pod: {1}. Payment value: {2} silver.</RimChat_ItemAirdropArrivedMultiBody>

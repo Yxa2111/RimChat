@@ -84,7 +84,7 @@ namespace RimChat.UI
                 return;
             }
 
-            const float rowHeight = 24f;
+            const float rowHeight = 30f;
             Rect view = new Rect(0f, 0f, Math.Max(1f, rect.width - 16f), basket.Count * rowHeight);
             scrollPosition = GUI.BeginScrollView(rect, scrollPosition, view);
             for (int i = 0; i < basket.Count; i++)
@@ -92,11 +92,17 @@ namespace RimChat.UI
                 ItemAirdropTradeLine line = basket[i];
                 Rect row = new Rect(0f, i * rowHeight, view.width, rowHeight - 2f);
                 if (i % 2 == 0) Widgets.DrawBoxSolid(row, new Color(0.12f, 0.12f, 0.16f, 0.72f));
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(line.DefName);
+                Rect iconRect = new Rect(row.x + 4f, row.y + 3f, 22f, 22f);
+                if (def?.uiIcon != null)
+                {
+                    GUI.DrawTexture(iconRect, def.uiIcon);
+                }
                 Text.Font = GameFont.Tiny;
                 string label = string.IsNullOrWhiteSpace(line.Label) ? line.DefName : line.Label;
-                Widgets.Label(new Rect(row.x + 5f, row.y + 3f, row.width - 85f, 18f),
+                Widgets.Label(new Rect(iconRect.xMax + 6f, row.y + 5f, row.width - 116f, 18f),
                     $"{label} x{line.Count}  ({(line.UnitPrice * line.Count).ToString("F0", CultureInfo.InvariantCulture)})");
-                Rect remove = new Rect(row.xMax - 24f, row.y + 1f, 22f, 21f);
+                Rect remove = new Rect(row.xMax - 26f, row.y + 2f, 24f, 24f);
                 if (Widgets.ButtonText(remove, "×"))
                 {
                     basket.RemoveAt(i);
