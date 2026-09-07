@@ -68,6 +68,10 @@ namespace RimChat.Memory
         public AirdropTradeCardStatus pendingAirdropTradeCardStatus = AirdropTradeCardStatus.None;
         public Dictionary<string, AirdropTradeCardStatus> airdropTradeCardStatusByRequestId =
             new Dictionary<string, AirdropTradeCardStatus>(StringComparer.Ordinal);
+        private List<ItemAirdropTradeLine> pendingNeedItems = new List<ItemAirdropTradeLine>();
+        private List<ItemAirdropTradeLine> pendingPaymentItems = new List<ItemAirdropTradeLine>();
+        public List<ItemAirdropTradeLine> GetPendingNeedItems() => ItemAirdropBasket.Copy(pendingNeedItems);
+        public List<ItemAirdropTradeLine> GetPendingPaymentItems() => ItemAirdropBasket.Copy(pendingPaymentItems);
         public bool isWaitingForRansomTargetSelection = false;
         public int boundRansomTargetPawnLoadId = 0;
         public string boundRansomTargetFactionId = string.Empty;
@@ -310,7 +314,9 @@ namespace RimChat.Memory
             string scenario,
             int shippingPodCount = 0,
             int shippingCostSilver = 0,
-            string requestId = null)
+            string requestId = null,
+            List<ItemAirdropTradeLine> needItems = null,
+            List<ItemAirdropTradeLine> paymentItems = null)
         {
             string normalizedRequestId = string.IsNullOrWhiteSpace(requestId)
                 ? Guid.NewGuid().ToString("N")
@@ -341,6 +347,10 @@ namespace RimChat.Memory
             pendingAirdropTradeCardSubmittedTick = Find.TickManager?.TicksGame ?? 0;
             pendingAirdropTradeCardShippingPodCount = Math.Max(0, shippingPodCount);
             pendingAirdropTradeCardShippingCost = Math.Max(0, shippingCostSilver);
+            pendingNeedItems = ItemAirdropBasket.Copy(needItems ?? new List<ItemAirdropTradeLine>
+            { new ItemAirdropTradeLine { DefName = needDefName, Label = needLabel, Count = requestedCount } });
+            pendingPaymentItems = ItemAirdropBasket.Copy(paymentItems ?? new List<ItemAirdropTradeLine>
+            { new ItemAirdropTradeLine { DefName = paymentItemDef, Label = paymentItemLabel, Count = paymentItemCount } });
         }
 
         public void SetAirdropTradeCardStatus(string requestId, AirdropTradeCardStatus status)
@@ -412,6 +422,8 @@ namespace RimChat.Memory
             pendingAirdropTradeCardSubmittedTick = 0;
             pendingAirdropTradeCardShippingPodCount = 0;
             pendingAirdropTradeCardShippingCost = 0;
+            pendingNeedItems.Clear();
+            pendingPaymentItems.Clear();
         }
 
         public void ClearPendingAirdropExecutionState()
@@ -467,6 +479,21 @@ namespace RimChat.Memory
             if (!hasPendingAirdropTradeCardReference)
             {
                 return false;
+            }
+
+            if (pendingNeedItems.Count > 0 && pendingPaymentItems.Count > 0)
+            {
+                referenceBlock = "[AirdropTradeCardReference]\n" +
+                    $"request_id: {pendingAirdropTradeCardRequestId}\nstatus: {pendingAirdropTradeCardStatus}\n" +
+                    $"faction_id: {faction?.GetUniqueLoadID()}\n" +
+                    $"need_items (faction sends to player): [{ItemAirdropBasket.Reference(pendingNeedItems)}]\n" +
+                    $"payment_items (player pays faction): [{ItemAirdropBasket.Reference(pendingPaymentItems)}]\n" +
+                    $"scenario: {pendingAirdropTradeCardScenario}\nshipping_pods: {pendingAirdropTradeCardShippingPodCount}\n" +
+                    $"shipping_cost_silver: {pendingAirdropTradeCardShippingCost}\n" +
+                    "Accept the ENTIRE basket only with accept_item_airdrop(request_id). Never modify any line or split it into separate actions. " +
+                    "Refusal/counteroffer leaves this ID pending. All older revised IDs are invalid. Wait for player confirmation before claiming completion.\n" +
+                    "[/AirdropTradeCardReference]";
+                return true;
             }
 
             string scenario = string.IsNullOrWhiteSpace(pendingAirdropTradeCardScenario)
@@ -984,6 +1011,8 @@ namespace RimChat.Memory
         public float airdropOfferUnitPrice;
         public float airdropOfferTotalPrice;
         public string airdropRequestId;
+        public List<ItemAirdropTradeLine> airdropNeedItems = new List<ItemAirdropTradeLine>();
+        public List<ItemAirdropTradeLine> airdropPaymentItems = new List<ItemAirdropTradeLine>();
 
         public DialogueMessageData()
         {
@@ -1016,6 +1045,10 @@ namespace RimChat.Memory
             Scribe_Values.Look(ref airdropOfferUnitPrice, "airdropOfferUnitPrice", 0f);
             Scribe_Values.Look(ref airdropOfferTotalPrice, "airdropOfferTotalPrice", 0f);
             Scribe_Values.Look(ref airdropRequestId, "airdropRequestId", string.Empty);
+            Scribe_Collections.Look(ref airdropNeedItems, "airdropNeedItems", LookMode.Deep);
+            Scribe_Collections.Look(ref airdropPaymentItems, "airdropPaymentItems", LookMode.Deep);
+            airdropNeedItems ??= new List<ItemAirdropTradeLine>();
+            airdropPaymentItems ??= new List<ItemAirdropTradeLine>();
 
             if (Scribe.mode == LoadSaveMode.LoadingVars)
             {

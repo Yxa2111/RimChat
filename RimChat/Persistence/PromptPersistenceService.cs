@@ -5323,9 +5323,23 @@ namespace RimChat.Persistence
                 changed |= AssignIfMissing(ref target.Requirement, defAction.Requirement);
                 changed |= TryUpgradeLegacyMakePeaceAction(target, defAction);
                 changed |= TryUpgradeRansomActionContract(target, defAction);
+                changed |= TryUpgradeItemAirdropMultiItemContract(target, defAction);
             }
 
             return changed;
+        }
+
+        private static bool TryUpgradeItemAirdropMultiItemContract(ApiActionConfig target, ApiActionConfig defAction)
+        {
+            if (target == null || defAction == null ||
+                !string.Equals(target.ActionName, "request_item_airdrop", StringComparison.Ordinal))
+                return false;
+            if ((target.Parameters ?? string.Empty).IndexOf("need_items", StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+            target.Description = defAction.Description;
+            target.Parameters = defAction.Parameters;
+            target.Requirement = defAction.Requirement;
+            return true;
         }
 
         private static bool TryUpgradeLegacyMakePeaceAction(ApiActionConfig target, ApiActionConfig defAction)
@@ -6137,14 +6151,13 @@ namespace RimChat.Persistence
                 PromptTextConstants.OutputSpecificationAuthorityBoundaryRule,
                 PromptTextConstants.OutputSpecificationAuthorityHistoryStyleRule,
                 "- [Caravan role direction -- highest priority] When you dispatch request_caravan, the caravan travels to the player colony. You (the AI faction) are the SELLER: the caravan carries goods from YOUR faction's trade list for the player to buy with silver. The player is the BUYER. Direction is NEVER reversible -- you are NOT buying from the player, and the player is NOT selling to the caravan.",
-                "- [Direction constraint -- highest priority] need is what YOU (the AI faction) sell and airdrop to the PLAYER colony (AI -> player). payment_items is what the PLAYER pays to YOU, deducted from player beacon inventory (player -> AI). The direction of need and payment_items is NEVER reversible -- you are NOT the buyer. If the player says they want 1000 wood, need is 1000 wood (YOU send to PLAYER), NOT something you receive.",
+                "- [Direction constraint -- highest priority] need_items is what YOU (the AI faction) sell and airdrop to the PLAYER colony (AI -> player). payment_items is what the PLAYER pays to YOU, deducted from player beacon inventory (player -> AI). Each side may contain multiple item/count rows. The direction is NEVER reversible -- you are NOT the buyer.",
                 "- 除非同条回复包含匹配 actions 动作，否则禁止把 gameplay 效果叙述为“已执行”。",
                 "- request_caravan/request_visitor/request_aid/request_raid/request_item_airdrop/request_info/pay_prisoner_ransom/create_quest/trigger_incident 属于延迟或系统调度动作；表述应是意图或安排，不是已到达/已完成结果。",
                 "- 物资交换/发送常识：新请求可通过 request_item_airdrop 实现即时物资交换；已有交易卡必须通过 accept_item_airdrop(request_id) 接受；request_caravan 属于延时交易。",
                 "- 空投交易卡协议：若存在 [AirdropTradeCardReference]，必须原样复制其中的 request_id 调用 accept_item_airdrop；只写‘同意/接受’或改用 request_item_airdrop 都不会接受该请求。派系拒绝后可以在后续轮次用同一 request_id 改变主意。",
                 "- 空投接受是整单接受：accept_item_airdrop 不接收改价、改物资或改数量参数；任何修改都必须等待玩家提交新的修订交易卡。",
-                "- 空投交易硬约束：单次 request_item_airdrop 只能一种物品换一种物品（一个 need 对应一组 payment_items）。禁止在 need 中写多种物品（如“1000原木和50钢铁”），禁止在 payment_items 中混入需求物资。need 只能包含一种物品及其数量。",
-                "- need 字段必须忠实反映玩家需求：若玩家消息中包含明确数量（如“1000原木”“50个钢铁”），need 必须携带该数量（格式：数字+物品名），禁止忽略玩家指定的数量。",
+                "- 空投交易支持双方多物品：need_items 与 payment_items 都是数组，每项必须包含精确 item defName 和正整数 count。必须逐项忠实保留玩家指定的物资和数量。",
                 "- payment_items 格式：数组，每项必须同时含 item（string）和 count（正整数）。示例：[{\"item\":\"Silver\",\"count\":220}]。缺失 item 或 count 将导致动作执行失败。",
                 "- 若玩家准确命中你掌握的交易事实（库存、价格区间、需求），可在不违背成本底线时考虑让步并打折。",
                 "- 商队硬约束：request_caravan 派出的商队所携带的物资由派系交易清单决定，你无法指定、修改或承诺商队携带的具体物资。玩家也无法通过商队请求指定物资交易。当玩家要求特定物资时，必须引导其改用 request_item_airdrop（空投可指定物资）。request_caravan 的合法类型只有 General / BulkGoods / CombatSupplier / Exotic / Slaver；必须使用这些精确值之一，不能自造值。",
@@ -6152,9 +6165,9 @@ namespace RimChat.Persistence
                 "- 通信语境硬约束：当前是通信终端在线聊天，不是线下会面；禁止写“我已到场/当面处理/带人离开”。",
                 "- 赎金语义约束：仅在缺少有效 target_pawn_load_id 时使用 request_info(info_type=prisoner)；目标已明确时可直接 pay_prisoner_ransom。",
                 "- 若可见文本出现“我会安排/我已提交/这就派出/马上下单”等明确执行承诺，必须同条回复附带匹配的 {\"actions\":[...]}；否则必须改写为澄清提问或不确定表达。",
-                "- 当玩家消息包含空投交易信息卡字段（need/count/payment_items/scenario）且信息卡已精确绑定 need_def 时，该 need_def 是强绑定执行目标；你可以拒绝或重报价。若要改变数量、物资或付款方式，必须等待玩家编辑并提交新的修订卡，不能静默改动现有卡。",
+                "- 当玩家消息包含空投交易信息卡字段（need_items/payment_items/scenario）时，两边的完整清单都是强绑定执行目标；你可以拒绝或重报价。若要改变任一物资、数量或付款方式，必须等待玩家编辑并提交新的修订卡。",
                 "- 若你选择重报价且本轮不执行动作，请用沉浸式自然对白表达，但必须在可见文本中明确说出目标物资、数量、银币价格，且最好补一句简短原因（例如库存、风险、路程、损耗）；避免使用生硬的“重报价: item=... count=... silver=...”硬编码句式。",
-                "- 若你决定执行 request_item_airdrop，且当前存在交易卡绑定的 need_def，则动作中的 need 必须仍指向该物资；若你想改物资，只能先自然语言提出更换并等待玩家重新选品或重新提交交易卡。",
+                "- 若当前存在交易卡，不能再调用 request_item_airdrop 改写 need_items 或 payment_items；只能用 accept_item_airdrop 接受整张卡，或等待玩家提交修订卡。",
                 "- 赎金专用硬约束：若文本出现“已提交/已支付/钱货两清/已放人离开”等完成态措辞，必须同条包含 pay_prisoner_ransom；否则必须回退为待确认措辞。",
                 "- 对“再发一次/发送请求/还是没收到”等催单型模糊意图，若缺少关键参数（need/type/questDefName/defName），优先追问确认，不得直接宣称已提交。",
                 "- 只有 adjust_goodwill 可根据对话语气或上下文直接改变好感。",
@@ -6246,7 +6259,7 @@ namespace RimChat.Persistence
                 case "request_raid_waves":
                     return "waves(2-6)";
                 case "request_item_airdrop":
-                    return "need, payment_items[{item(defName优先),count}], scenario?(general/trade/ransom), constraints?, budget_silver?(仅审计)";
+                    return "need_items[{item(defName),count}], payment_items[{item(defName),count}], scenario?(general/trade/ransom), constraints?, budget_silver?(仅审计); legacy need仍兼容";
                 case "accept_item_airdrop":
                     return "request_id(当前交易卡中的精确 UUID)";
                 case "request_info":
@@ -6305,7 +6318,7 @@ namespace RimChat.Persistence
                 case "create_quest":
                     return "仅允许使用可用列表中的精确 questDefName";
                 case "request_item_airdrop":
-                    return "need/payment_items 必填；预算由 payment_items 按市场价求和后 Floor 派生（最低价 0.01；保留既有倍率：无 tradeTags 时 x10，含 ExoticMisc 时 x2），budget_silver 若存在仅用于审计且不参与执行；payment_items.item 优先 defName、label 仅在可唯一匹配时可用；找不到匹配/歧义/库存不足直接失败；若玩家给出已精确绑定 need_def 的空投信息卡，则 need_def 为强绑定目标，只允许拒绝或重报价；如需改变数量、物资或付款方式，必须等待玩家编辑并提交新的修订卡，不能用 request_item_airdrop 静默绕过；若只做重报价且本轮不执行动作，请用自然对白明确说出物资、数量、银币价格与简短原因，不要输出生硬模板。";
+                    return "need_items/payment_items 必填且双方都可有多行；每行使用精确 defName 和正整数 count。预算由 payment_items 按交易价求和后 Floor 派生；找不到物资、库存不足或任一行不合法时整单失败。已有交易卡只能拒绝、重报价或使用 accept_item_airdrop 原样接受；任何修改都等待玩家提交修订卡。";
                 case "accept_item_airdrop":
                     return "必须提供并原样复制当前 [AirdropTradeCardReference] 的 request_id；接受整张交易卡的原始物资、数量、付款和场景，不得改用 request_item_airdrop，不得在玩家确认前宣称已完成。";
                 case "request_info":
@@ -6352,7 +6365,7 @@ namespace RimChat.Persistence
                 case "request_raid":
                     return "安排袭击";
                 case "request_item_airdrop":
-                    return "检索真实 ThingDef 并通过原版空投发送 Top1 物资";
+                    return "按双方多物品清单校验并通过原版空投完成交易";
                 case "accept_item_airdrop":
                     return "接受当前空投交易卡的完整报价";
                 case "request_info":

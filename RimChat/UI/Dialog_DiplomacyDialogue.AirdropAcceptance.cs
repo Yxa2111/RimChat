@@ -160,35 +160,18 @@ namespace RimChat.UI
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(currentSession.pendingAirdropTradeCardNeedDefName) ||
-                string.IsNullOrWhiteSpace(currentSession.pendingAirdropTradeCardPaymentItemDef) ||
-                currentSession.pendingAirdropTradeCardRequestedCount <= 0 ||
-                currentSession.pendingAirdropTradeCardPaymentItemCount <= 0)
+            if (!ItemAirdropBasket.TryNormalize(currentSession.GetPendingNeedItems(), out var needs) ||
+                !ItemAirdropBasket.TryNormalize(currentSession.GetPendingPaymentItems(), out var payments))
             {
                 failureMessage = "RimChat_ItemAirdropAcceptTermsInvalid".Translate(requestId).ToString();
                 return false;
             }
 
-            string need = currentSession.pendingAirdropTradeCardNeed;
-            if (string.IsNullOrWhiteSpace(need))
-            {
-                need = $"{currentSession.pendingAirdropTradeCardNeedDefName} x{currentSession.pendingAirdropTradeCardRequestedCount}";
-            }
-
-            var paymentItems = new List<Dictionary<string, object>>
-            {
-                new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["item"] = currentSession.pendingAirdropTradeCardPaymentItemDef,
-                    ["count"] = currentSession.pendingAirdropTradeCardPaymentItemCount
-                }
-            };
             var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["need"] = need,
-                ["count"] = currentSession.pendingAirdropTradeCardRequestedCount,
-                ["selected_def"] = currentSession.pendingAirdropTradeCardNeedDefName,
-                ["payment_items"] = paymentItems,
+                ["need"] = ItemAirdropBasket.Summary(needs),
+                ["need_items"] = ItemAirdropBasket.ToParameters(needs),
+                ["payment_items"] = ItemAirdropBasket.ToParameters(payments),
                 ["scenario"] = string.IsNullOrWhiteSpace(currentSession.pendingAirdropTradeCardScenario)
                     ? "trade"
                     : currentSession.pendingAirdropTradeCardScenario,
@@ -299,10 +282,7 @@ namespace RimChat.UI
             }
 
             AirdropTradeCardStatus status = currentSession.pendingAirdropTradeCardStatus;
-            bool isSelectionRetry = status == AirdropTradeCardStatus.Preparing &&
-                                     action?.Parameters != null &&
-                                     action.Parameters.ContainsKey("selected_def");
-            if ((status == AirdropTradeCardStatus.Preparing && !isSelectionRetry) ||
+            if (status == AirdropTradeCardStatus.Preparing ||
                 status == AirdropTradeCardStatus.AwaitingPlayerConfirm ||
                 status == AirdropTradeCardStatus.Executing)
             {
@@ -416,6 +396,21 @@ namespace RimChat.UI
             {
                 failureMessage = "RimChat_ItemAirdropAcceptRequestExpired".Translate(requestId).ToString();
                 return false;
+            }
+
+            if (preparedTrade.DeliveryLines?.Count > 0)
+            {
+                bool matches = ItemAirdropBasket.SameTerms(currentSession.GetPendingNeedItems(), preparedTrade.DeliveryLines) &&
+                    ItemAirdropBasket.SameTerms(currentSession.GetPendingPaymentItems(), preparedTrade.PaymentLines.Select(p =>
+                        new ItemAirdropTradeLine { DefName = p.DefName, Count = p.Count })) &&
+                    ItemAirdropBasket.SameTerms(currentSession.GetPendingPaymentItems(), preparedTrade.DeductionPlan.Select(p =>
+                        new ItemAirdropTradeLine { DefName = p.DefName, Count = p.Count })) &&
+                    string.Equals(preparedTrade.Scenario, currentSession.pendingAirdropTradeCardScenario, StringComparison.Ordinal) &&
+                    string.Equals(preparedTrade.FactionId, currentSession.faction?.GetUniqueLoadID(), StringComparison.Ordinal) &&
+                    preparedTrade.ShippingPodCount == currentSession.pendingAirdropTradeCardShippingPodCount &&
+                    preparedTrade.ShippingCostSilver == currentSession.pendingAirdropTradeCardShippingCost;
+                if (!matches) failureMessage = "RimChat_AirdropBasketTermsChanged".Translate().ToString();
+                return matches;
             }
 
             string expectedDef = currentSession.pendingAirdropTradeCardNeedDefName?.Trim() ?? string.Empty;

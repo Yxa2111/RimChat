@@ -43,6 +43,17 @@ namespace RimChat.DiplomacySystem
                 return APIResult.FailureResult("[prepared_trade_missing] Missing prepared airdrop trade payload.");
             }
 
+            if (!string.IsNullOrWhiteSpace(preparedData.FactionId) &&
+                !string.Equals(preparedData.FactionId, faction.GetUniqueLoadID(), StringComparison.Ordinal))
+            {
+                return FailFastAirdrop("prepared_faction_mismatch", "Prepared airdrop belongs to another faction.", faction, preparedData.ParametersSnapshot);
+            }
+
+            if (preparedData.DeliveryLines != null && preparedData.DeliveryLines.Count > 0)
+            {
+                return CommitPreparedMultiItemAirdropTrade(faction, preparedData);
+            }
+
             Map map = Find.Maps?.FirstOrDefault(m => m != null && m.uniqueID == preparedData.MapUniqueId);
             if (map == null)
             {
@@ -180,6 +191,11 @@ namespace RimChat.DiplomacySystem
             bool requirePlayerHome,
             Pawn playerNegotiator)
         {
+            if (parameters != null && parameters.ContainsKey("need_items"))
+            {
+                return PrepareMultiItemAirdropTradeForMap(faction, parameters, map, requirePlayerHome, playerNegotiator);
+            }
+
             if (RimChatMod.Instance?.InstanceSettings == null)
             {
                 return APIResult.FailureResult("Settings not initialized");
@@ -1079,6 +1095,7 @@ namespace RimChat.DiplomacySystem
 
     public sealed class ItemAirdropPreparedTradeData
     {
+        public string FactionId { get; set; }
         public string NeedText { get; set; }
         public string Scenario { get; set; }
         public string SelectedDefName { get; set; }
@@ -1101,6 +1118,7 @@ namespace RimChat.DiplomacySystem
         public string PaymentPriceSemantic { get; set; } = "market_value_x0.6";
         public int MapUniqueId { get; set; }
         public SpecialItemType? SpecialItemType { get; set; }
+        public List<ItemAirdropTradeLine> DeliveryLines { get; set; } = new List<ItemAirdropTradeLine>();
         public List<ItemAirdropPreparedPaymentLine> PaymentLines { get; set; } = new List<ItemAirdropPreparedPaymentLine>();
         public List<ItemAirdropDeductionPlanLine> DeductionPlan { get; set; } = new List<ItemAirdropDeductionPlanLine>();
         public Dictionary<string, object> ParametersSnapshot { get; set; } = new Dictionary<string, object>();

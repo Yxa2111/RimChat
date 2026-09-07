@@ -82,7 +82,9 @@ namespace RimChat.UI
                 return true;
             }
 
-            Log.Message($"[RimChat] Airdrop context validation passed: faction={currentFaction?.Name}, defName={currentFaction?.def?.defName}, need={actionSnapshot.Parameters?["need"] ?? "null"}");
+            object needValue = null;
+            actionSnapshot.Parameters?.TryGetValue("need", out needValue);
+            Log.Message($"[RimChat] Airdrop context validation passed: faction={currentFaction?.Name}, defName={currentFaction?.def?.defName}, need={needValue ?? "null"}");
 
             var lease = new DialogueRequestLease(
                 requestContext.DialogueSessionId,
@@ -423,9 +425,15 @@ namespace RimChat.UI
             }
 
             ItemAirdropPreparedTradeData trade = state.PreparedTrade;
-            string tradeLabel = string.IsNullOrWhiteSpace(trade?.ResolvedLabel)
+            bool hasDeliveryBasket = trade?.DeliveryLines?.Count > 0;
+            string tradeLabel = hasDeliveryBasket
+                ? "RimChat_AirdropMultipleItems".Translate().ToString()
+                : string.IsNullOrWhiteSpace(trade?.ResolvedLabel)
                 ? (trade?.SelectedDefName ?? "")
                 : trade.ResolvedLabel;
+            string basketDetails = hasDeliveryBasket
+                ? BuildAirdropConfirmationBasketDetails(trade)
+                : string.Empty;
             int quantity = trade?.Quantity ?? 1;
             int requestedQuantity = trade?.RequestedQuantity ?? quantity;
             int paymentTotal = trade?.PaymentTotalSilver ?? 0;
@@ -455,6 +463,7 @@ namespace RimChat.UI
                 shippingCost,
                 shippingPods,
                 adjustmentReason,
+                basketDetails,
                 hasManualAlternative,
                 () => CommitConfirmedAirdropTrade(state.Session, state.Faction, state.PreparedTrade),
                 () =>
@@ -482,6 +491,15 @@ namespace RimChat.UI
                 },
                 () => OpenAirdropAlternativeSelection(state.Session, state.Faction, state.BaseParameters, availableCandidates));
             Find.WindowStack.Add(confirmationDialog);
+        }
+
+        private static string BuildAirdropConfirmationBasketDetails(ItemAirdropPreparedTradeData trade)
+        {
+            string deliveries = string.Join("\n", (trade?.DeliveryLines ?? new List<ItemAirdropTradeLine>())
+                .Select(line => $"• {(string.IsNullOrWhiteSpace(line.Label) ? line.DefName : line.Label)} x{line.Count}"));
+            string payments = string.Join("\n", (trade?.PaymentLines ?? new List<ItemAirdropPreparedPaymentLine>())
+                .Select(line => $"• {(string.IsNullOrWhiteSpace(line.Label) ? line.DefName : line.Label)} x{line.Count}"));
+            return $"{"RimChat_AirdropFactionDelivers".Translate()}:\n{deliveries}\n\n{"RimChat_AirdropPlayerPays".Translate()}:\n{payments}";
         }
 
         private static List<PendingAirdropSelectionCandidate> ClonePendingAirdropCandidates(
@@ -573,12 +591,14 @@ namespace RimChat.UI
             private readonly int shippingCost;
             private readonly int shippingPods;
             private readonly string adjustmentReason;
+            private readonly string basketDetails;
+            private Vector2 basketScrollPosition;
             private readonly Action onConfirm;
             private readonly Action onCancel;
             private readonly Action onAlternative;
             private readonly bool optionalAlternativeVisible;
 
-            public override Vector2 InitialSize => new Vector2(500f, 320f);
+            public override Vector2 InitialSize => new Vector2(500f, string.IsNullOrWhiteSpace(basketDetails) ? 320f : 420f);
 
             public Dialog_AirdropTradeConfirmWithAlternative(
                 string tradeLabel,
@@ -590,6 +610,7 @@ namespace RimChat.UI
                 int shippingCost,
                 int shippingPods,
                 string adjustmentReason,
+                string basketDetails,
                 bool hasAlternative,
                 Action onConfirm,
                 Action onCancel,
@@ -604,6 +625,7 @@ namespace RimChat.UI
                 this.shippingCost = shippingCost;
                 this.shippingPods = shippingPods;
                 this.adjustmentReason = adjustmentReason ?? string.Empty;
+                this.basketDetails = basketDetails ?? string.Empty;
                 this.onConfirm = onConfirm;
                 this.onCancel = onCancel;
                 this.onAlternative = onAlternative;
@@ -633,6 +655,19 @@ namespace RimChat.UI
                 float mainHeight = Text.CalcHeight(mainLine, inRect.width - 20f);
                 Widgets.Label(new Rect(inRect.x + 10f, y, inRect.width - 20f, mainHeight), mainLine);
                 y += mainHeight + 6f;
+
+                if (!string.IsNullOrWhiteSpace(basketDetails))
+                {
+                    Rect basketRect = new Rect(inRect.x + 10f, y, inRect.width - 20f, 120f);
+                    Widgets.DrawBoxSolid(basketRect, new Color(0.10f, 0.10f, 0.13f, 0.75f));
+                    Text.Font = GameFont.Tiny;
+                    float textHeight = Math.Max(basketRect.height, Text.CalcHeight(basketDetails, basketRect.width - 24f));
+                    Rect view = new Rect(0f, 0f, basketRect.width - 16f, textHeight);
+                    basketScrollPosition = GUI.BeginScrollView(basketRect, basketScrollPosition, view);
+                    Widgets.Label(new Rect(6f, 4f, view.width - 12f, textHeight), basketDetails);
+                    GUI.EndScrollView();
+                    y += basketRect.height + 8f;
+                }
 
                 // Quantity adjustment note
                 Text.Font = GameFont.Tiny;

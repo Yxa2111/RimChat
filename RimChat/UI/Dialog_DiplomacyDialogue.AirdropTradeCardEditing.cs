@@ -66,6 +66,8 @@ namespace RimChat.UI
                 ShippingPodCount = latest.airdropShippingPodCount,
                 ShippingCostSilver = latest.airdropShippingCostSilver,
                 RequestId = requestId,
+                NeedItems = session.GetPendingNeedItems(),
+                PaymentItems = session.GetPendingPaymentItems(),
                 IsRevision = true
             };
         }

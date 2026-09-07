@@ -942,6 +942,7 @@ namespace RimChat.DiplomacySystem
 
     public sealed class ItemAirdropResultData
     {
+        public List<ItemAirdropTradeLine> DeliveryLines { get; set; } = new List<ItemAirdropTradeLine>();
         public string SelectedDefName { get; set; }
         public string ResolvedLabel { get; set; }
         public int BudgetUsed { get; set; }

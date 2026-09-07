@@ -755,7 +755,7 @@
     <RimChat_AirdropTradeCard_NeedItemCard>需求物资</RimChat_AirdropTradeCard_NeedItemCard>
     <RimChat_AirdropTradeCard_OfferItemCard>出价物资</RimChat_AirdropTradeCard_OfferItemCard>
     <RimChat_AirdropTradeCard_NoNeedItemBound>未绑定需求物资，请搜索并选择。</RimChat_AirdropTradeCard_NoNeedItemBound>
-    <RimChat_AirdropTradeCard_TitleHint>搜索并精确绑定目标物资，参考价格会按需求数量自动计算。</RimChat_AirdropTradeCard_TitleHint>
+    <RimChat_AirdropTradeCard_TitleHint>选择物资和数量并点击“添加”，可重复添加交易双方的多种物资。</RimChat_AirdropTradeCard_TitleHint>
     <RimChat_AirdropTradeCard_NeedBindingMissing>尚未精确绑定需求物资，当前不能提交。</RimChat_AirdropTradeCard_NeedBindingMissing>
     <RimChat_AirdropTradeCard_NeedBindingReady>已绑定：{0}（{1}）</RimChat_AirdropTradeCard_NeedBindingReady>
     <RimChat_Price>价格</RimChat_Price>
@@ -2805,4 +2805,12 @@ ID：{5}
     <RimChat_RPGChoice_KeyHints>↑↓ 选择｜Enter 确认｜Space 快进｜Esc 退出</RimChat_RPGChoice_KeyHints>
     <RimChat_RPGChoice_RollSuccess>检定成功</RimChat_RPGChoice_RollSuccess>
     <RimChat_RPGChoice_RollFailure>检定失败</RimChat_RPGChoice_RollFailure>
+    <RimChat_AirdropTradeCard_AddItem>添加</RimChat_AirdropTradeCard_AddItem>
+    <RimChat_AirdropTradeCard_BasketEmpty>选择物资和数量，然后点击“添加”。</RimChat_AirdropTradeCard_BasketEmpty>
+    <RimChat_AirdropBasketSummary>派系交付：{0}。玩家支付：{1}。</RimChat_AirdropBasketSummary>
+    <RimChat_AirdropBasketTermsChanged>准备结果与本请求的物资清单不一致，未扣除或投放任何物资。</RimChat_AirdropBasketTermsChanged>
+    <RimChat_ItemAirdropArrivedMultiBody>{0} 已通过空投舱交付：{1}。付款价值：{2} 银币。</RimChat_ItemAirdropArrivedMultiBody>
+    <RimChat_AirdropMultipleItems>多种物资</RimChat_AirdropMultipleItems>
+    <RimChat_AirdropFactionDelivers>派系交付</RimChat_AirdropFactionDelivers>
+    <RimChat_AirdropPlayerPays>玩家支付</RimChat_AirdropPlayerPays>
 </LanguageData>

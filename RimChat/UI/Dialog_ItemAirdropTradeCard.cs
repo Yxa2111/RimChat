@@ -10,7 +10,7 @@ using Verse;
 
 namespace RimChat.UI
 {
-    public class Dialog_ItemAirdropTradeCard : Window
+    public partial class Dialog_ItemAirdropTradeCard : Window
     {
         private readonly FactionDialogueSession session;
         private readonly Faction faction;
@@ -20,6 +20,8 @@ namespace RimChat.UI
         private readonly SearchStateManager searchState = new SearchStateManager();
         private readonly List<InventoryDisplayEntry> inventoryItems = new List<InventoryDisplayEntry>();
         private readonly List<InventoryDisplayEntry> filteredInventoryItems = new List<InventoryDisplayEntry>();
+        private readonly List<ItemAirdropTradeLine> needBasket = new List<ItemAirdropTradeLine>();
+        private readonly List<ItemAirdropTradeLine> paymentBasket = new List<ItemAirdropTradeLine>();
         private List<InventoryDisplayEntry> pendingInventoryItems;
 
         private string needSearchText = string.Empty;
@@ -32,6 +34,8 @@ namespace RimChat.UI
         private float selectedOfferUnitPrice = 1f;
         private string selectedOfferPriceSemantic = "market_value_x0.6";
         private Vector2 inventoryScrollPos = Vector2.zero;
+        private Vector2 needBasketScrollPos = Vector2.zero;
+        private Vector2 paymentBasketScrollPos = Vector2.zero;
         private ThingDefRecord boundNeedRecord;
         private bool showInlineSuggestions;
         private bool isLoadingInventory;
@@ -84,6 +88,17 @@ namespace RimChat.UI
             {
                 return;
             }
+
+            needBasket.Clear();
+            paymentBasket.Clear();
+            if (ItemAirdropBasket.TryNormalize(initialPayload.NeedItems, out List<ItemAirdropTradeLine> initialNeeds))
+                needBasket.AddRange(ItemAirdropBasket.Copy(initialNeeds));
+            else if (!string.IsNullOrWhiteSpace(initialPayload.NeedDefName))
+                needBasket.Add(new ItemAirdropTradeLine { DefName = initialPayload.NeedDefName, Label = initialPayload.NeedLabel, Count = Math.Max(1, initialPayload.RequestedCount), UnitPrice = initialPayload.NeedUnitPrice });
+            if (ItemAirdropBasket.TryNormalize(initialPayload.PaymentItems, out List<ItemAirdropTradeLine> initialPayments))
+                paymentBasket.AddRange(ItemAirdropBasket.Copy(initialPayments));
+            else if (!string.IsNullOrWhiteSpace(initialPayload.OfferItemDefName))
+                paymentBasket.Add(new ItemAirdropTradeLine { DefName = initialPayload.OfferItemDefName, Label = initialPayload.OfferItemLabel, Count = Math.Max(1, initialPayload.OfferItemCount), UnitPrice = initialPayload.OfferUnitPrice });
 
             requestedCountText = Math.Max(1, initialPayload.RequestedCount).ToString(CultureInfo.InvariantCulture);
             offerCountText = Math.Max(1, initialPayload.OfferItemCount).ToString(CultureInfo.InvariantCulture);
@@ -400,22 +415,8 @@ namespace RimChat.UI
         {
             DrawPanel(rect, new Color(0.07f, 0.09f, 0.11f, 0.98f));
             DrawCardHeader(rect, "RimChat_AirdropTradeCard_NeedItemCard");
-            if (boundNeedRecord?.Def == null)
-            {
-                DrawEmptyCard(rect, "RimChat_AirdropTradeCard_NoNeedItemBound");
-                return;
-            }
-
-            // Determine price semantic based on whether this is a special item
-            string needPriceSemantic = ResolveNeedPriceSemantic();
-
-            DrawThingDefCardContent(
-                rect,
-                boundNeedRecord,
-                Math.Max(1, ParsePositiveInt(requestedCountText, 1)),
-                ResolveNeedUnitPrice(),
-                ComputeNeedReferenceTotal(),
-                needPriceSemantic);
+            DrawBasketAddButton(new Rect(rect.xMax - 82f, rect.y + 5f, 72f, 26f), boundNeedRecord?.Def != null, AddCurrentNeedToBasket);
+            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 45f), needBasket, ref needBasketScrollPos);
         }
 
         private string ResolveNeedPriceSemantic()
@@ -429,20 +430,8 @@ namespace RimChat.UI
             DrawPanel(rect, new Color(0.07f, 0.09f, 0.11f, 0.98f));
             DrawCardHeader(rect, "RimChat_AirdropTradeCard_OfferItemCard");
             ThingDef offerDef = DefDatabase<ThingDef>.GetNamedSilentFail(selectedOfferDefName);
-            if (offerDef == null)
-            {
-                DrawEmptyCard(rect, "RimChat_AirdropTradeCard_NoOfferItem");
-                return;
-            }
-
-            ThingDefRecord record = ThingDefRecord.From(offerDef);
-            DrawThingDefCardContent(
-                rect,
-                record,
-                Math.Max(1, ParsePositiveInt(offerCountText, 1)),
-                selectedOfferUnitPrice,
-                ComputeOfferTotal(),
-                selectedOfferPriceSemantic);
+            DrawBasketAddButton(new Rect(rect.xMax - 82f, rect.y + 5f, 72f, 26f), offerDef != null, AddCurrentPaymentToBasket);
+            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 45f), paymentBasket, ref paymentBasketScrollPos);
         }
 
         private void DrawCardHeader(Rect rect, string key)
@@ -732,8 +721,8 @@ namespace RimChat.UI
             GUI.color = new Color(0.74f, 0.78f, 0.88f);
             Widgets.Label(new Rect(rect.x + 10f, rect.y + 6f, 120f, 14f), "RimChat_AirdropTradeCard_ReferencePriceLabel".Translate());
             Text.Font = GameFont.Small;
-            GUI.color = boundNeedRecord?.Def == null ? new Color(0.64f, 0.66f, 0.72f) : new Color(0.96f, 0.82f, 0.4f);
-            string value = boundNeedRecord?.Def == null
+            GUI.color = needBasket.Count == 0 ? new Color(0.64f, 0.66f, 0.72f) : new Color(0.96f, 0.82f, 0.4f);
+            string value = needBasket.Count == 0
                 ? "RimChat_AirdropTradeCard_ReferencePriceEmpty".Translate().ToString()
                 : BuildReferencePriceFormulaText();
             Widgets.Label(new Rect(rect.x + 10f, rect.y + 18f, rect.width - 20f, 20f), value);
@@ -799,14 +788,13 @@ namespace RimChat.UI
 
         private int ComputePodCount()
         {
-            if (boundNeedRecord?.Def == null)
+            int pods = 0;
+            foreach (ItemAirdropTradeLine line in needBasket)
             {
-                return 0;
+                ThingDef def = DefDatabase<ThingDef>.GetNamedSilentFail(line.DefName);
+                pods += (int)Math.Ceiling((double)Math.Max(1, line.Count) / Math.Max(1, def?.stackLimit ?? 1));
             }
-
-            int needCount = ParsePositiveInt(requestedCountText, 1);
-            int stackLimit = Math.Max(1, boundNeedRecord.Def.stackLimit);
-            return (int)Math.Ceiling((double)needCount / stackLimit);
+            return pods;
         }
 
         private bool CanSubmit()
@@ -816,24 +804,14 @@ namespace RimChat.UI
 
         private string GetSubmitDisabledReason()
         {
-            if (boundNeedRecord?.Def == null || string.IsNullOrWhiteSpace(boundNeedRecord.DefName))
+            if (needBasket.Count == 0)
             {
                 return "RimChat_AirdropTradeCard_SubmitDisabledNeed".Translate().ToString();
             }
 
-            if (string.IsNullOrWhiteSpace(selectedOfferDefName))
+            if (paymentBasket.Count == 0)
             {
                 return "RimChat_AirdropTradeCard_SubmitDisabledOffer".Translate().ToString();
-            }
-
-            if (!int.TryParse(requestedCountText, out int requestedCount) || requestedCount <= 0)
-            {
-                return "RimChat_AirdropTradeCard_SubmitDisabledRequestCount".Translate().ToString();
-            }
-
-            if (!int.TryParse(offerCountText, out int offerCount) || offerCount <= 0)
-            {
-                return "RimChat_AirdropTradeCard_SubmitDisabledOfferCount".Translate().ToString();
             }
 
             return string.Empty;
@@ -846,10 +824,7 @@ namespace RimChat.UI
                 return;
             }
 
-            int requestedCount = ParsePositiveInt(requestedCountText, 1);
-            int offerCount = ParsePositiveInt(offerCountText, 1);
-
-            string validationFailure = ValidateBeforeSubmit(offerCount);
+            string validationFailure = ValidateBeforeSubmit();
             if (!string.IsNullOrWhiteSpace(validationFailure))
             {
                 ShowValidationFailureDialog(validationFailure);
@@ -859,28 +834,29 @@ namespace RimChat.UI
             int podCount = ComputePodCount();
             AirdropTradeRuleSnapshot tradeRule = ResolveTradeRuleSnapshot();
             int shippingCost = podCount * tradeRule.ShippingCostPerPod;
-            float needUnitPrice = ResolveNeedUnitPrice();
+            ItemAirdropTradeLine firstNeed = needBasket[0];
+            ItemAirdropTradeLine firstPayment = paymentBasket[0];
             var payload = new ItemAirdropTradeCardPayload
             {
-                Need = string.IsNullOrWhiteSpace(boundNeedRecord.Label)
-                    ? $"{boundNeedRecord.DefName} x{requestedCount}"
-                    : $"{boundNeedRecord.Label} x{requestedCount}",
-                RequestedCount = requestedCount,
-                OfferItemDefName = selectedOfferDefName,
-                OfferItemLabel = selectedOfferLabel,
-                OfferItemCount = offerCount,
+                Need = ItemAirdropBasket.Summary(needBasket),
+                RequestedCount = firstNeed.Count,
+                OfferItemDefName = firstPayment.DefName,
+                OfferItemLabel = firstPayment.Label,
+                OfferItemCount = firstPayment.Count,
                 Scenario = "trade",
-                NeedDefName = boundNeedRecord.DefName,
-                NeedLabel = boundNeedRecord.Label,
-                NeedSearchText = boundNeedRecord.SearchText,
-                NeedUnitPrice = needUnitPrice,
+                NeedDefName = firstNeed.DefName,
+                NeedLabel = firstNeed.Label,
+                NeedSearchText = firstNeed.Label,
+                NeedUnitPrice = firstNeed.UnitPrice,
                 NeedReferenceTotalPrice = ComputeNeedReferenceTotal(),
-                OfferUnitPrice = selectedOfferUnitPrice,
+                OfferUnitPrice = firstPayment.UnitPrice,
                 OfferTotalPrice = ComputeOfferTotal(),
                 ShippingPodCount = podCount,
                 ShippingCostSilver = shippingCost,
                 RequestId = Guid.NewGuid().ToString("N"),
-                IsRevision = initialPayload != null && initialPayload.IsRevision
+                IsRevision = initialPayload != null && initialPayload.IsRevision,
+                NeedItems = ItemAirdropBasket.Copy(needBasket),
+                PaymentItems = ItemAirdropBasket.Copy(paymentBasket)
             };
 
             onSubmitted?.Invoke(payload);
@@ -965,12 +941,7 @@ namespace RimChat.UI
 
         private float ComputeNeedReferenceTotal()
         {
-            if (boundNeedRecord?.Def == null)
-            {
-                return 0f;
-            }
-
-            return Math.Max(0f, ResolveNeedUnitPrice() * ParsePositiveInt(requestedCountText, 1));
+            return needBasket.Sum(line => Math.Max(0f, line.UnitPrice) * Math.Max(0, line.Count));
         }
 
         private float ResolveNeedUnitPrice()
@@ -1016,10 +987,10 @@ namespace RimChat.UI
 
         private float ComputeOfferTotal()
         {
-            return Math.Max(0f, selectedOfferUnitPrice * ParsePositiveInt(offerCountText, 1));
+            return paymentBasket.Sum(line => Math.Max(0f, line.UnitPrice) * Math.Max(0, line.Count));
         }
 
-        private string ValidateBeforeSubmit(int offerCount)
+        private string ValidateBeforeSubmit()
         {
             Map map = Find.AnyPlayerHomeMap ?? Find.CurrentMap;
             if (map != null && Core.MapUtility.IsOrbitalBaseMap(map))
@@ -1027,13 +998,12 @@ namespace RimChat.UI
                 return "RimChat_AirdropSubmitOrbitalBase".Translate();
             }
 
-            InventoryDisplayEntry offerEntry = FindInventoryEntryByDefName(selectedOfferDefName);
-            if (offerEntry == null || offerEntry.Count < offerCount)
+            foreach (ItemAirdropTradeLine line in paymentBasket)
             {
-                return "RimChat_AirdropSubmitInsufficientOffer".Translate(
-                    selectedOfferLabel ?? selectedOfferDefName ?? "RimChat_Unknown".Translate(),
-                    offerCount,
-                    offerEntry?.Count ?? 0);
+                InventoryDisplayEntry offerEntry = FindInventoryEntryByDefName(line.DefName);
+                if (offerEntry == null || offerEntry.Count < line.Count)
+                    return "RimChat_AirdropSubmitInsufficientOffer".Translate(
+                        line.Label ?? line.DefName ?? "RimChat_Unknown".Translate(), line.Count, offerEntry?.Count ?? 0);
             }
 
             return string.Empty;

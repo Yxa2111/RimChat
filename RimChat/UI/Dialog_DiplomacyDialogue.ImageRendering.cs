@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using RimChat.DiplomacySystem;
 using RimChat.Memory;
 using UnityEngine;
 using Verse;
@@ -620,11 +622,15 @@ namespace RimChat.UI
             float profitRatio = finalQuoteTotal > 0f ? offerTotal / finalQuoteTotal : 1f;
             string shippingText = BuildAirdropBubbleShippingText(msg);
 
+            List<ItemAirdropTradeLine> needLines = msg?.airdropNeedItems;
+            List<ItemAirdropTradeLine> paymentLines = msg?.airdropPaymentItems;
+            bool hasNeedBasket = needLines != null && needLines.Count > 0;
+            bool hasPaymentBasket = paymentLines != null && paymentLines.Count > 0;
             DrawAirdropCompactCard(
                 needCardRect,
-                msg.airdropNeedLabel,
-                msg.airdropNeedDefName,
-                msg.airdropRequestedCount,
+                hasNeedBasket ? ItemAirdropBasket.Summary(needLines) : msg.airdropNeedLabel,
+                hasNeedBasket && needLines.Count > 1 ? string.Empty : msg.airdropNeedDefName,
+                hasNeedBasket ? needLines.Sum(line => Math.Max(0, line.Count)) : msg.airdropRequestedCount,
                 msg.airdropNeedUnitPrice,
                 msg.airdropNeedReferenceTotalPrice,
                 contentPanelColor,
@@ -638,9 +644,9 @@ namespace RimChat.UI
 
             DrawAirdropCompactCard(
                 offerCardRect,
-                msg.airdropOfferLabel,
-                msg.airdropOfferDefName,
-                msg.airdropOfferCount,
+                hasPaymentBasket ? ItemAirdropBasket.Summary(paymentLines) : msg.airdropOfferLabel,
+                hasPaymentBasket && paymentLines.Count > 1 ? string.Empty : msg.airdropOfferDefName,
+                hasPaymentBasket ? paymentLines.Sum(line => Math.Max(0, line.Count)) : msg.airdropOfferCount,
                 msg.airdropOfferUnitPrice,
                 msg.airdropOfferTotalPrice,
                 contentPanelColor,

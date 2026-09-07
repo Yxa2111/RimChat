@@ -203,15 +203,14 @@ action_rules.txt 文件允许你为 AI 添加额外的指令，这些指令会�
 -------------------
 **作用**：按需求检索真实 ThingDef 并空投到殖民地
 **参数**：
-  - need: 需求文本（必填；若玩家指定了数量则必须包含，如 "1000原木"、"50钢铁"）
+  - need_items: 派系交付清单（必填，数组；每项含精确 item defName/count）
   - payment_items: 付款清单（必填，数组；每项含 item/count，item 优先写 defName，label 仅备用）
   - scenario: 场景（可选，trade/ransom/general）
   - constraints: 额外约束（可选，string）
   - budget_silver: 可选预算字段（仅审计，执行时忽略）
 **使用时机**：玩家明确索要具体物资，并且你能给出清晰需求关键词时
 **限制**：
-  - need 必填；必须忠实反映玩家需求，若玩家消息含明确数量（如"1000原木"），need 必须携带该数量，禁止忽略
-  - 单物品硬约束：单次只能一种物品换一种物品，need 只能写一种物品及其数量，禁止写多种物品（如"1000原木和50钢铁"）
+  - need_items 必填且至少 1 行；双方清单都可包含多种物品，必须逐项保留物资和数量
   - payment_items 必填且至少 1 行；每行都必须有 item（string）和 count（正整数）；item 优先 defName，若用 label 必须可唯一匹配
   - 系统会将 payment_items 按市场价求和后向下取整（Floor）生成预算（budget_silver）
   - 若当前是轨道商通信，request_item_airdrop 是唯一允许的具体物资交换动作；不得改成“去地面据点送货/交订单”类任务
@@ -219,9 +218,8 @@ action_rules.txt 文件允许你为 AI 添加额外的指令，这些指令会�
   - 命中黑名单、预算不足、无合法落点或无可匹配 Def 时必须失败
   - 只执行 Top1，不得随机替代
 **示例**：
-  - request_item_airdrop,need:1000原木,payment_items:[{"item":"Silver","count":1200}]
-  - request_item_airdrop,need:medical supplies,payment_items:[{"item":"Silver","count":800},{"item":"Gold","count":3}]
-  - request_item_airdrop,need:50钢铁,payment_items:[{"item":"Silver","count":280},{"item":"ComponentIndustrial","count":8}],scenario:trade
+  - request_item_airdrop,need_items:[{"item":"WoodLog","count":1000}],payment_items:[{"item":"Silver","count":1200}]
+  - request_item_airdrop,need_items:[{"item":"MedicineIndustrial","count":20},{"item":"ComponentIndustrial","count":8}],payment_items:[{"item":"Silver","count":800},{"item":"Gold","count":3}],scenario:trade
 
 2.7.1. accept_item_airdrop
 -------------------

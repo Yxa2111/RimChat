@@ -101,9 +101,9 @@
         },
         {
             "ActionName": "request_item_airdrop",
-            "Description": "根据需求检索真实 ThingDef，并在玩家确认后通过原版空投即时发送物资（无需等待、不消耗额外回合）。",
-            "Parameters": "need（string，必填；若玩家明确指定了数量，need 中必须包含该数量，如 '1000个原木'、'50钢铁'），payment_items（array，必填；每项含 item/count，item 优先使用 defName，label 仅备用），scenario（string，可选：trade/ransom/general），constraints（string，可选），budget_silver（int，可选，仅审计）",
-            "Requirement": "need、payment_items 必填；need 必须忠实反映玩家需求——当玩家消息中包含明确数量（如“1000原木”“50个钢铁”）时，need 字段必须携带该数量信息（格式：数字+物品名，如 '1000原木'），禁止忽略玩家指定的数量；预算由 payment_items 按市场价（默认取 ThingDef.BaseMarketValue，定价下限 0.01；保留既有倍率：无 tradeTags 时 x10，含 ExoticMisc 时 x2）求和后向下取整（Floor）自动派生，budget_silver 若提供仅用于审计且不参与执行。payment_items 必须是可从通电轨道信标范围扣除的真实物资；item 优先 defName，label 仅在可唯一匹配时可用。若玩家给出空投交易卡字段，视为不可变报价：派系可以拒绝或重报价；接受现有卡必须调用 accept_item_airdrop 并原样复制 request_id，不能用 request_item_airdrop 改参数绕过。若要修改物资、数量或付款，等待玩家编辑并提交新的修订卡；若仅重报价且不执行动作，使用自然对白明确说出物资、数量、银币价格和简短原因。空投为即时呼叫，但仍须经过玩家最终确认。任一条件不满足必须 fail-fast 并给出原因。",
+            "Description": "提交可包含多种物资的精确空投交易，并在玩家最终确认后通过原版空投舱交付。当前有交易卡时必须改用 accept_item_airdrop 和精确 request_id。",
+            "Parameters": "need_items（array，必填；派系交付给玩家，每项含精确 item defName/count），payment_items（array，必填；玩家支付给派系，每项含精确 item defName/count），scenario（string，可选：trade/ransom/general），constraints（string，可选），budget_silver（int，可选，仅审计）。旧版单项 need 仍兼容。",
+            "Requirement": "need_items 与 payment_items 均可包含多行，且每行必须有精确 item defName 和正整数 count。系统将逐项校验交付物、价格、轨道信标库存和扣除计划；任一项无效或不足时整单失败，不得静默减量、替换或改价。若存在空投交易卡，接受现有卡必须调用 accept_item_airdrop 并原样复制 request_id，不能用 request_item_airdrop 绕过或修改条款。",
             "IsEnabled": true
         },
         {

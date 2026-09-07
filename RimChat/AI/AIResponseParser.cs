@@ -1009,7 +1009,7 @@ namespace RimChat.AI
                 string paymentItem0Type = DescribeAirdropPaymentItem0Type(parameters);
                 string paymentItem0Keys = DescribeAirdropPaymentItem0Keys(parameters);
                 Log.Warning(
-                    $"[RimChat] Dropped request_item_airdrop action because required parameters are missing or invalid (need, payment_items). " +
+                    $"[RimChat] Dropped request_item_airdrop action because required parameters are missing or invalid (need_items or legacy need, payment_items). " +
                     $"need_present={needPresent}, " +
                     $"payment_items_type={paymentItemsType}, " +
                     $"payment_items_count={paymentItemsCount}, " +
@@ -1143,7 +1143,9 @@ namespace RimChat.AI
         {
             NormalizeAirdropBarterParameters(parameters, visibleDialogue);
 
-            if (!HasNonEmptyText(parameters, "need", requireString: true))
+            bool hasLegacyNeed = HasNonEmptyText(parameters, "need", requireString: true);
+            bool hasNeedItems = HasValidAirdropItemArray(parameters, "need_items");
+            if (!hasLegacyNeed && !hasNeedItems)
             {
                 return false;
             }
@@ -1169,6 +1171,20 @@ namespace RimChat.AI
                 hasAny = true;
             }
 
+            return hasAny;
+        }
+
+        private static bool HasValidAirdropItemArray(Dictionary<string, object> parameters, string key)
+        {
+            if (parameters == null || !parameters.TryGetValue(key, out object raw) || !(raw is IEnumerable<object> rows))
+                return false;
+            bool hasAny = false;
+            foreach (object row in rows)
+            {
+                if (!(row is Dictionary<string, object> item) || !HasNonEmptyText(item, "item") || !HasPositiveInteger(item, "count"))
+                    return false;
+                hasAny = true;
+            }
             return hasAny;
         }
 

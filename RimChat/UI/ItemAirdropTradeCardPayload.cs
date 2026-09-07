@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using RimChat.DiplomacySystem;
 using System.Globalization;
 using Verse;
 
@@ -14,6 +16,8 @@ namespace RimChat.UI
         public string Scenario { get; set; } = "trade";
         public string RequestId { get; set; }
         public bool IsRevision { get; set; }
+        public List<ItemAirdropTradeLine> NeedItems { get; set; } = new List<ItemAirdropTradeLine>();
+        public List<ItemAirdropTradeLine> PaymentItems { get; set; } = new List<ItemAirdropTradeLine>();
 
         public string NeedDefName { get; set; }
         public string NeedLabel { get; set; }
@@ -25,10 +29,11 @@ namespace RimChat.UI
         public int ShippingPodCount { get; set; }
         public int ShippingCostSilver { get; set; }
 
-        public bool HasBoundNeed => !string.IsNullOrWhiteSpace(NeedDefName);
+        public bool HasBoundNeed => (NeedItems?.Count ?? 0) > 0 || !string.IsNullOrWhiteSpace(NeedDefName);
 
         public string GetNeedReferenceText()
         {
+            if ((NeedItems?.Count ?? 0) > 0) return ItemAirdropBasket.Summary(NeedItems);
             int requestedCount = Math.Max(1, RequestedCount);
             if (!string.IsNullOrWhiteSpace(NeedLabel))
             {
@@ -50,6 +55,8 @@ namespace RimChat.UI
 
         public string ToVisibleSummary()
         {
+            if ((NeedItems?.Count ?? 0) > 0) return "RimChat_AirdropBasketSummary".Translate(
+                ItemAirdropBasket.Summary(NeedItems), ItemAirdropBasket.Summary(PaymentItems)).ToString();
             string offerLabel = string.IsNullOrWhiteSpace(OfferItemLabel)
                 ? (OfferItemDefName ?? string.Empty)
                 : OfferItemLabel;

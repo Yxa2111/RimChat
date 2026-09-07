@@ -1112,7 +1112,7 @@
     <RimChat_AirdropTradeCard_NeedItemCard>Need Item</RimChat_AirdropTradeCard_NeedItemCard>
     <RimChat_AirdropTradeCard_OfferItemCard>Offer Item</RimChat_AirdropTradeCard_OfferItemCard>
     <RimChat_AirdropTradeCard_NoNeedItemBound>No need item bound. Search and select.</RimChat_AirdropTradeCard_NoNeedItemBound>
-    <RimChat_AirdropTradeCard_TitleHint>Search and bind the exact target item. Reference price updates from requested quantity automatically.</RimChat_AirdropTradeCard_TitleHint>
+    <RimChat_AirdropTradeCard_TitleHint>Select an item and quantity, click Add, then repeat to build both sides of the trade.</RimChat_AirdropTradeCard_TitleHint>
     <RimChat_AirdropTradeCard_NeedBindingMissing>No exact need item is bound yet. Submission is blocked.</RimChat_AirdropTradeCard_NeedBindingMissing>
     <RimChat_AirdropTradeCard_NeedBindingReady>Bound: {0} ({1})</RimChat_AirdropTradeCard_NeedBindingReady>
     <RimChat_Price>Price</RimChat_Price>
@@ -2714,4 +2714,12 @@ Selected prisoners: {1}
     <RimChat_RPGChoice_KeyHints>↑↓ Select | Enter Confirm | Space Fast-forward | Esc Exit</RimChat_RPGChoice_KeyHints>
     <RimChat_RPGChoice_RollSuccess>SUCCESS</RimChat_RPGChoice_RollSuccess>
     <RimChat_RPGChoice_RollFailure>FAILURE</RimChat_RPGChoice_RollFailure>
+    <RimChat_AirdropTradeCard_AddItem>Add</RimChat_AirdropTradeCard_AddItem>
+    <RimChat_AirdropTradeCard_BasketEmpty>Select an item and quantity, then click Add.</RimChat_AirdropTradeCard_BasketEmpty>
+    <RimChat_AirdropBasketSummary>Faction delivers: {0}. Player pays: {1}.</RimChat_AirdropBasketSummary>
+    <RimChat_AirdropBasketTermsChanged>The prepared item lists no longer match this request. Nothing was charged or delivered.</RimChat_AirdropBasketTermsChanged>
+    <RimChat_ItemAirdropArrivedMultiBody>{0} delivered the following items by drop pod: {1}. Payment value: {2} silver.</RimChat_ItemAirdropArrivedMultiBody>
+    <RimChat_AirdropMultipleItems>multiple items</RimChat_AirdropMultipleItems>
+    <RimChat_AirdropFactionDelivers>Faction delivers</RimChat_AirdropFactionDelivers>
+    <RimChat_AirdropPlayerPays>Player pays</RimChat_AirdropPlayerPays>
 </LanguageData>

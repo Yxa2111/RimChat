@@ -23,7 +23,19 @@ namespace RimChat.DiplomacySystem
             Action<APIResult> onCompleted,
             Action<string, int> onRequestQueued)
         {
-            Log.Message($"[RimChat] BeginPrepareItemAirdropTradeAsync: faction={faction?.Name}, defName={faction?.def?.defName}, need={parameters?["need"] ?? "null"}");
+            if (parameters != null && parameters.ContainsKey("need_items"))
+            {
+                if (playerNegotiator == null || playerNegotiator.Map == null)
+                {
+                    return APIResult.FailureResult("Preparing a barter airdrop requires a valid player negotiator on a map.");
+                }
+
+                return PrepareMultiItemAirdropTradeForMap(faction, parameters, playerNegotiator.Map, true, playerNegotiator);
+            }
+
+            object needValue = null;
+            parameters?.TryGetValue("need", out needValue);
+            Log.Message($"[RimChat] BeginPrepareItemAirdropTradeAsync: faction={faction?.Name}, defName={faction?.def?.defName}, need={needValue ?? "null"}");
             
             APIResult contextResult = TryBuildAirdropAsyncContext(
                 faction,

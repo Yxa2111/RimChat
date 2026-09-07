@@ -297,9 +297,10 @@ namespace RimChat.DiplomacySystem
                         }
 
                         string need = TryReadStringParameter(parameters, "need");
-                        if (string.IsNullOrWhiteSpace(need))
+                        bool hasNeedItems = ItemAirdropBasket.TryRead(parameters, "need_items", out _);
+                        if (string.IsNullOrWhiteSpace(need) && !hasNeedItems)
                         {
-                            return ActionValidationResult.Denied("airdrop_need_required", "request_item_airdrop requires parameter 'need'.");
+                            return ActionValidationResult.Denied("airdrop_need_required", "request_item_airdrop requires 'need_items' or legacy parameter 'need'.");
                         }
 
                         if (!TryReadPaymentItemsArray(parameters, out _))

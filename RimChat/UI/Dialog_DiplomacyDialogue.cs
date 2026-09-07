@@ -2736,7 +2736,9 @@ namespace RimChat.UI
                     airdropTradeCardPayload.Scenario,
                     airdropTradeCardPayload.ShippingPodCount,
                     airdropTradeCardPayload.ShippingCostSilver,
-                    airdropTradeCardPayload.RequestId);
+                    airdropTradeCardPayload.RequestId,
+                    airdropTradeCardPayload.NeedItems.Count > 0 ? airdropTradeCardPayload.NeedItems : null,
+                    airdropTradeCardPayload.PaymentItems.Count > 0 ? airdropTradeCardPayload.PaymentItems : null);
             }
             currentSession.lastPlayerRequestText = playerMessage;
             currentSession.lastPlayerRequestWasAirdropTradeCard = airdropTradeCardPayload != null;
@@ -2762,6 +2764,9 @@ namespace RimChat.UI
                     airdropTradeCardPayload.OfferTotalPrice,
                     playerSpeakerPawn,
                     airdropTradeCardPayload.RequestId);
+                DialogueMessageData cardMessage = currentSession.messages.Last();
+                cardMessage.airdropNeedItems = currentSession.GetPendingNeedItems();
+                cardMessage.airdropPaymentItems = currentSession.GetPendingPaymentItems();
             }
             else
             {
