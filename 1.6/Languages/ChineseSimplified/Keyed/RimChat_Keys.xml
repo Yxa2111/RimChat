@@ -2807,6 +2807,11 @@ ID：{5}
     <RimChat_RPGChoice_RollFailure>检定失败</RimChat_RPGChoice_RollFailure>
     <RimChat_AirdropTradeCard_AddItem>添加</RimChat_AirdropTradeCard_AddItem>
     <RimChat_AirdropTradeCard_BasketEmpty>选择物资和数量，然后点击“添加”。</RimChat_AirdropTradeCard_BasketEmpty>
+    <RimChat_AirdropTradeCard_AddAllInventory>全部</RimChat_AirdropTradeCard_AddAllInventory>
+    <RimChat_AirdropTradeCard_AddAllInventoryTooltip>将当前可交易库存中的全部 {0} 个{1}加入出价。</RimChat_AirdropTradeCard_AddAllInventoryTooltip>
+    <RimChat_AirdropTradeCard_MarketValueTotal>市场价总计（未计倍率）：{0}</RimChat_AirdropTradeCard_MarketValueTotal>
+    <RimChat_AirdropTradeCard_MarketComparison>市场价：需求 {0}｜出价 {1}</RimChat_AirdropTradeCard_MarketComparison>
+    <RimChat_AirdropTradeCard_MarketDifference>差额（出价－需求）：{0}｜比例：{1}</RimChat_AirdropTradeCard_MarketDifference>
     <RimChat_AirdropBasketSummary>派系交付：{0}。玩家支付：{1}。</RimChat_AirdropBasketSummary>
     <RimChat_AirdropBasketTermsChanged>准备结果与本请求的物资清单不一致，未扣除或投放任何物资。</RimChat_AirdropBasketTermsChanged>
     <RimChat_ItemAirdropArrivedMultiBody>{0} 已通过空投舱交付：{1}。付款价值：{2} 银币。</RimChat_ItemAirdropArrivedMultiBody>

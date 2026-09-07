@@ -416,7 +416,8 @@ namespace RimChat.UI
             DrawPanel(rect, new Color(0.07f, 0.09f, 0.11f, 0.98f));
             DrawCardHeader(rect, "RimChat_AirdropTradeCard_NeedItemCard");
             DrawBasketAddButton(new Rect(rect.xMax - 82f, rect.y + 5f, 72f, 26f), boundNeedRecord?.Def != null, AddCurrentNeedToBasket);
-            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 45f), needBasket, ref needBasketScrollPos);
+            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 68f), needBasket, ref needBasketScrollPos);
+            DrawBasketMarketTotal(new Rect(rect.x + 10f, rect.yMax - 25f, rect.width - 20f, 18f), needBasket);
         }
 
         private string ResolveNeedPriceSemantic()
@@ -431,7 +432,8 @@ namespace RimChat.UI
             DrawCardHeader(rect, "RimChat_AirdropTradeCard_OfferItemCard");
             ThingDef offerDef = DefDatabase<ThingDef>.GetNamedSilentFail(selectedOfferDefName);
             DrawBasketAddButton(new Rect(rect.xMax - 82f, rect.y + 5f, 72f, 26f), offerDef != null, AddCurrentPaymentToBasket);
-            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 45f), paymentBasket, ref paymentBasketScrollPos);
+            DrawBasketRows(new Rect(rect.x + 10f, rect.y + 37f, rect.width - 20f, rect.height - 68f), paymentBasket, ref paymentBasketScrollPos);
+            DrawBasketMarketTotal(new Rect(rect.x + 10f, rect.yMax - 25f, rect.width - 20f, 18f), paymentBasket);
         }
 
         private void DrawCardHeader(Rect rect, string key)
@@ -615,6 +617,8 @@ namespace RimChat.UI
         private void DrawInventoryRow(InventoryDisplayEntry entry, float width, float y)
         {
             Rect rowRect = new Rect(2f, y, width - 4f, InventoryRowHeight - 2f);
+            Rect allButtonRect = new Rect(rowRect.xMax - 58f, rowRect.y + 9f, 52f, 26f);
+            Rect selectionRect = new Rect(rowRect.x, rowRect.y, rowRect.width - 64f, rowRect.height);
             bool selected = string.Equals(selectedOfferDefName, entry.DefName, StringComparison.OrdinalIgnoreCase);
             Widgets.DrawBoxSolid(rowRect, selected ? new Color(0.19f, 0.39f, 0.63f, 0.82f) : new Color(0.12f, 0.12f, 0.16f, 0.82f));
             if (selected)
@@ -632,7 +636,7 @@ namespace RimChat.UI
             }
 
             float textX = iconRect.xMax + 8f;
-            float textWidth = rowRect.width - (textX - rowRect.x) - 8f;
+            float textWidth = allButtonRect.x - textX - 6f;
             Text.Font = GameFont.Tiny;
             Widgets.Label(new Rect(textX, rowRect.y + 5f, textWidth * 0.62f, 16f), $"{entry.Label} ({entry.DefName})");
             GUI.color = new Color(0.72f, 0.78f, 0.9f);
@@ -642,10 +646,17 @@ namespace RimChat.UI
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
 
-            if (Widgets.ButtonInvisible(rowRect))
+            if (Widgets.ButtonInvisible(selectionRect))
             {
                 ApplyOfferSelection(entry);
             }
+
+            if (Widgets.ButtonText(allButtonRect, "RimChat_AirdropTradeCard_AddAllInventory".Translate()))
+            {
+                AddAllCurrentPaymentToBasket(entry);
+            }
+            TooltipHandler.TipRegion(allButtonRect,
+                "RimChat_AirdropTradeCard_AddAllInventoryTooltip".Translate(entry.Count, entry.Label));
         }
 
         private void DrawFooter(Rect rect)
@@ -654,6 +665,8 @@ namespace RimChat.UI
 
             Rect statRect = new Rect(rect.x + 12f, rect.y + 8f, rect.width * 0.58f, 38f);
             DrawReferencePriceBlock(statRect);
+            Rect comparisonRect = new Rect(statRect.xMax + 12f, statRect.y, rect.xMax - statRect.xMax - 24f, statRect.height);
+            DrawMarketValueComparisonBlock(comparisonRect);
 
             float inputWidth = rect.width * 0.55f;
             DrawFooterInputs(new Rect(rect.x + 12f, rect.y + 50f, inputWidth, 26f));
