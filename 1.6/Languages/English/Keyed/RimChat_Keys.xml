@@ -2731,4 +2731,13 @@ Selected prisoners: {1}
     <RimChat_AirdropMultipleItems>multiple items</RimChat_AirdropMultipleItems>
     <RimChat_AirdropFactionDelivers>Faction delivers</RimChat_AirdropFactionDelivers>
     <RimChat_AirdropPlayerPays>Player pays</RimChat_AirdropPlayerPays>
+    <RimChat_NativeToolFailureSystem>Tool {0} failed [{1}]: {2}</RimChat_NativeToolFailureSystem>
+    <RimChat_AirdropTradeCard_Status_Pending>Negotiating</RimChat_AirdropTradeCard_Status_Pending>
+    <RimChat_AirdropTradeCard_Status_Preparing>Preparing</RimChat_AirdropTradeCard_Status_Preparing>
+    <RimChat_AirdropTradeCard_Status_AwaitingPlayerConfirm>Awaiting confirmation</RimChat_AirdropTradeCard_Status_AwaitingPlayerConfirm>
+    <RimChat_AirdropTradeCard_Status_Executing>Executing</RimChat_AirdropTradeCard_Status_Executing>
+    <RimChat_AirdropTradeCard_Status_Completed>Completed</RimChat_AirdropTradeCard_Status_Completed>
+    <RimChat_AirdropTradeCard_Status_Cancelled>Cancelled</RimChat_AirdropTradeCard_Status_Cancelled>
+    <RimChat_AirdropTradeCard_Status_Superseded>Superseded</RimChat_AirdropTradeCard_Status_Superseded>
+    <RimChat_AirdropTradeCard_Status_History>History</RimChat_AirdropTradeCard_Status_History>
 </LanguageData>

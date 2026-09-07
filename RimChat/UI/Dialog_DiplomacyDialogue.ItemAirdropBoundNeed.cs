@@ -14,28 +14,6 @@ namespace RimChat.UI
     public partial class Dialog_DiplomacyDialogue
     {
         private static bool TryInjectPendingAirdropTradeCardMetadata(
-            List<AIAction> actions,
-            FactionDialogueSession currentSession,
-            out string failureMessage)
-        {
-            failureMessage = string.Empty;
-            if (actions == null || actions.Count == 0)
-            {
-                return true;
-            }
-
-            for (int i = 0; i < actions.Count; i++)
-            {
-                if (!TryInjectPendingAirdropTradeCardMetadata(actions[i], currentSession, out failureMessage))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool TryInjectPendingAirdropTradeCardMetadata(
             AIAction action,
             FactionDialogueSession currentSession,
             out string failureMessage)
@@ -53,8 +31,7 @@ namespace RimChat.UI
             }
 
             // A live trade card can only be fulfilled by an action expanded from
-            // accept_item_airdrop. Delayed-intent recovery must not turn a stale
-            // free-form request_item_airdrop back into an executable request.
+            // accept_item_airdrop. A direct request_item_airdrop cannot bypass its id.
             if (currentSession?.hasPendingAirdropTradeCardReference == true)
             {
                 if (!HasAirdropTradeCardRequestId(action))

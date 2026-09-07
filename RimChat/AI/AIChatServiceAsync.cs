@@ -131,7 +131,6 @@ namespace RimChat.AI
         private const int LocalConnectionMaxAttempts = 2;
         private const int MaxImmersionRetryCount = 1;
         private const int MaxTextIntegrityRetryCount = 1;
-        private const int MaxDiplomacyContractRetryCount = 1;
         private const int MaxRpgContractRetryCount = 1;
         private const int MaxParseRetryCount = 1;
         private const int LocalRequestTimeoutSeconds = 60;
@@ -200,9 +199,14 @@ namespace RimChat.AI
             AIRequestDebugSource debugSource = AIRequestDebugSource.Other,
             int? requestTimeoutSecondsOverride = null,
             float? queueTimeoutSecondsOverride = null,
-            DialogueResponseExpectation responseExpectation = DialogueResponseExpectation.Default)
+            DialogueResponseExpectation responseExpectation = DialogueResponseExpectation.Default,
+            IReadOnlyList<NativeToolDefinition> nativeTools = null,
+            Action<NativeChatCompletionTurn> onNativeSuccess = null)
         {
-            List<ChatMessageData> normalizedMessages = NormalizeRequestMessagesForProvider(messages, usageChannel);
+            bool useNativeToolProtocol = nativeTools != null;
+            List<ChatMessageData> normalizedMessages = useNativeToolProtocol
+                ? CloneMessages(messages)
+                : NormalizeRequestMessagesForProvider(messages, usageChannel);
             string requestId = Guid.NewGuid().ToString("N");
             int requestContextVersion;
             int defaultTimeoutSeconds = RimChatMod.Instance == null ||
@@ -262,7 +266,9 @@ namespace RimChat.AI
                 debugSource,
                 responseExpectation,
                 requestContextVersion,
-                requestTimeoutSeconds));
+                requestTimeoutSeconds,
+                nativeTools,
+                onNativeSuccess));
             
             return requestId;
         }
@@ -398,7 +404,9 @@ namespace RimChat.AI
             AIRequestDebugSource debugSource,
             DialogueResponseExpectation responseExpectation,
             int requestContextVersion,
-            int requestTimeoutSeconds)
+            int requestTimeoutSeconds,
+            IReadOnlyList<NativeToolDefinition> nativeTools,
+            Action<NativeChatCompletionTurn> onNativeSuccess)
         {
             AIRequestDebugStatus debugStatus = AIRequestDebugStatus.Error;
             string debugResponseText = string.Empty;
@@ -571,7 +579,7 @@ namespace RimChat.AI
                     string jsonBody;
                     try
                     {
-                        jsonBody = BuildChatCompletionJson(model, attemptMessages, config, usageChannel);
+                        jsonBody = BuildChatCompletionJson(model, attemptMessages, config, usageChannel, nativeTools);
                     }
                     catch (Exception)
                     {
@@ -814,6 +822,40 @@ namespace RimChat.AI
                                 yield break;
                             }
 
+                            if (nativeTools != null)
+                            {
+                                NativeChatCompletionTurn nativeTurn = NativeChatCompletionParser.Parse(responseText);
+                                if (!nativeTurn.IsValid)
+                                {
+                                    string nativeError = string.IsNullOrWhiteSpace(nativeTurn.ErrorMessage)
+                                        ? "The model provider returned an invalid native tool response."
+                                        : nativeTurn.ErrorMessage;
+                                    string nativeCode = string.IsNullOrWhiteSpace(nativeTurn.ErrorCode)
+                                        ? "native_tool_protocol_error"
+                                        : nativeTurn.ErrorCode;
+                                    lock (lockObject)
+                                    {
+                                        SetRequestFailureLockless(requestId, nativeError, nativeCode);
+                                    }
+                                    ExecuteRequestActionOnMainThread(requestId, requestContextVersion, () => onError?.Invoke(nativeError));
+                                    debugStatus = AIRequestDebugStatus.Error;
+                                    debugResponseText = responseText;
+                                    debugErrorText = nativeError;
+                                    yield break;
+                                }
+
+                                TryRecordDialogueTokenUsage(attemptMessages, responseText, nativeTurn.Content, usageChannel);
+                                UpdateRequestState(requestId, AIRequestState.Completed, response: nativeTurn.Content);
+                                ExecuteRequestActionOnMainThread(requestId, requestContextVersion, () => onNativeSuccess?.Invoke(nativeTurn));
+                                debugStatus = AIRequestDebugStatus.Success;
+                                debugHttpCode = request.responseCode;
+                                debugResponseText = responseText;
+                                debugParsedResponse = nativeTurn.Content ?? string.Empty;
+                                debugErrorText = string.Empty;
+                                debugTokenMessages = attemptMessages;
+                                yield break;
+                            }
+
                             PrimaryTextExtractionResult parseResult = ParseResponse(responseText);
                             DebugLogger.LogParseExtraction("AIChatServiceAsync", parseResult);
                             if (!parseResult.IsSuccess)
@@ -1001,51 +1043,6 @@ namespace RimChat.AI
                                         parsedResponse = ModelOutputSanitizer.ComposeVisibleAndTrailingActions(
                                             integrityResult.VisibleDialogue,
                                             integrityResult.TrailingActionsJson);
-                                    }
-                                }
-                            }
-
-                            if (!bypassDialogueGuardsForSocialNews && usageChannel == DialogueUsageChannel.Diplomacy)
-                            {
-                                DiplomacyResponseContractCheckResult contractResult = parsedEnvelope != null
-                                    ? DiplomacyResponseContractGuard.ValidateVisibleDialogueParts(parsedEnvelope.VisibleDialogue, parsedEnvelope.ActionsJson)
-                                    : DiplomacyResponseContractGuard.Validate(parsedResponse);
-                                if (!contractResult.IsValid && contractRetryCount < MaxDiplomacyContractRetryCount)
-                                {
-                                    contractRetryCount++;
-                                    contractValidationStatus = "retry";
-                                    contractFailureReason =
-                                        DiplomacyResponseContractGuard.BuildViolationTag(contractResult.Violation);
-                                    attemptMessages = AppendDiplomacyContractRetryMessage(attemptMessages, contractResult);
-                                    Log.Warning(
-                                        $"[RimChat] Diplomacy contract guard requested retry: reason={contractFailureReason}");
-                                    attempt++;
-                                    continue;
-                                }
-
-                                if (!contractResult.IsValid)
-                                {
-                                    contractValidationStatus = "failed_after_retry";
-                                    contractFailureReason =
-                                        DiplomacyResponseContractGuard.BuildViolationTag(contractResult.Violation);
-                                    Log.Warning(
-                                        $"[RimChat] Diplomacy contract guard failed after retry, outputting raw response: reason={contractFailureReason}");
-                                }
-                                else
-                                {
-                                    contractValidationStatus = contractRetryCount > 0 ? "pass_after_retry" : "pass";
-                                    contractFailureReason = string.Empty;
-                                    if (parsedEnvelope != null)
-                                    {
-                                        parsedEnvelope.VisibleDialogue = contractResult.VisibleDialogue;
-                                        parsedEnvelope.ActionsJson = contractResult.TrailingActionsJson;
-                                        parsedResponse = parsedEnvelope.ToStructuredResponseText();
-                                    }
-                                    else
-                                    {
-                                        parsedResponse = ModelOutputSanitizer.ComposeVisibleAndTrailingActions(
-                                            contractResult.VisibleDialogue,
-                                            contractResult.TrailingActionsJson);
                                     }
                                 }
                             }
@@ -1681,27 +1678,6 @@ namespace RimChat.AI
             return NormalizeRequestMessagesForProvider(updated, DialogueUsageChannel.Rpg);
         }
 
-        private static List<ChatMessageData> AppendDiplomacyContractRetryMessage(
-            List<ChatMessageData> messages,
-            DiplomacyResponseContractCheckResult contractResult)
-        {
-            List<ChatMessageData> updated = CloneMessages(messages);
-            string reasonTag = DiplomacyResponseContractGuard.BuildViolationTag(
-                contractResult?.Violation ?? DiplomacyResponseContractViolation.None);
-            updated.Add(new ChatMessageData
-            {
-                role = "user",
-                content =
-                    $"DIPLOMACY_CONTRACT_VIOLATION={reasonTag}. Return exactly one JSON object only with visible_dialogue and optional actions. Put all visible dialogue inside visible_dialogue. If you make explicit execution commitments (arranged/submitted/dispatched), include the matching action inside the same top-level actions array. Do not place dialogue outside JSON. Do not append a trailing JSON object. " +
-                    "Use request_info(info_type=prisoner) only when ransom target information is missing; if target_pawn_load_id is already valid, pay_prisoner_ransom may be called directly. " +
-                    "For pay_prisoner_ransom, never claim payment/submission unless target_pawn_load_id and offer_silver are both valid positive integers. " +
-                    "For pay_prisoner_ransom, keep offer_silver inside the current offer window from system messages; current ask is a preferred reference, not a strict exact-match requirement. If offer_silver is out of range, execution will clamp it to the nearest window boundary before submit. " +
-                    "If a [RansomBatchSelection] block is present and you choose to output pay_prisoner_ransom this turn, output one action for every listed target_pawn_load_id exactly once in the same response, and keep total offer_silver inside the provided batch window. " +
-                    "If target is unknown or offer is missing, rewrite as one in-character clarification question and do NOT claim the request was submitted."
-            });
-            return NormalizeRequestMessagesForProvider(updated, DialogueUsageChannel.Diplomacy);
-        }
-
         private static List<ChatMessageData> AppendParseRetryMessage(
             List<ChatMessageData> messages,
             DialogueUsageChannel usageChannel,
@@ -1880,11 +1856,38 @@ namespace RimChat.AI
                 result.Add(new ChatMessageData
                 {
                     role = msg.role ?? string.Empty,
-                    content = msg.content ?? string.Empty
+                    content = msg.content,
+                    tool_call_id = msg.tool_call_id,
+                    name = msg.name,
+                    tool_calls = CloneToolCalls(msg.tool_calls)
                 });
             }
 
             return result;
+        }
+
+        private static List<NativeToolCall> CloneToolCalls(List<NativeToolCall> source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return source
+                .Where(call => call != null)
+                .Select(call => new NativeToolCall
+                {
+                    id = call.id,
+                    type = call.type,
+                    function = call.function == null
+                        ? null
+                        : new NativeToolFunctionCall
+                        {
+                            name = call.function.name,
+                            arguments = call.function.arguments
+                        }
+                })
+                .ToList();
         }
 
         private static string TrimMessageContent(string content, int maxChars)
@@ -2362,7 +2365,12 @@ namespace RimChat.AI
             return null;
         }
 
-        private string BuildChatCompletionJson(string model, List<ChatMessageData> messages, ApiConfig config, DialogueUsageChannel usageChannel)
+        private string BuildChatCompletionJson(
+            string model,
+            List<ChatMessageData> messages,
+            ApiConfig config,
+            DialogueUsageChannel usageChannel,
+            IReadOnlyList<NativeToolDefinition> nativeTools = null)
         {
             var sb = new StringBuilder();
             sb.Append("{");
@@ -2379,12 +2387,64 @@ namespace RimChat.AI
             {
                 if (i > 0) sb.Append(",");
                 sb.Append("{");
-                sb.Append($"\"role\":\"{EscapeJson(messages[i].role)}\",");
-                sb.Append($"\"content\":\"{EscapeJson(messages[i].content)}\"");
+                ChatMessageData message = messages[i];
+                sb.Append($"\"role\":\"{EscapeJson(message.role)}\"");
+                if (message.content == null)
+                {
+                    sb.Append(",\"content\":null");
+                }
+                else
+                {
+                    sb.Append($",\"content\":\"{EscapeJson(message.content)}\"");
+                }
+                if (!string.IsNullOrWhiteSpace(message.tool_call_id))
+                {
+                    sb.Append($",\"tool_call_id\":\"{EscapeJson(message.tool_call_id)}\"");
+                }
+                if (!string.IsNullOrWhiteSpace(message.name))
+                {
+                    sb.Append($",\"name\":\"{EscapeJson(message.name)}\"");
+                }
+                if (message.tool_calls != null && message.tool_calls.Count > 0)
+                {
+                    sb.Append(",\"tool_calls\":[");
+                    for (int callIndex = 0; callIndex < message.tool_calls.Count; callIndex++)
+                    {
+                        if (callIndex > 0) sb.Append(',');
+                        NativeToolCall call = message.tool_calls[callIndex];
+                        sb.Append('{');
+                        sb.Append($"\"id\":\"{EscapeJson(call?.id)}\",");
+                        sb.Append($"\"type\":\"{EscapeJson(call?.type ?? "function")}\",");
+                        sb.Append("\"function\":{");
+                        sb.Append($"\"name\":\"{EscapeJson(call?.function?.name)}\",");
+                        sb.Append($"\"arguments\":\"{EscapeJson(call?.function?.arguments ?? "{}")}\"");
+                        sb.Append("}}");
+                    }
+                    sb.Append(']');
+                }
                 sb.Append("}");
             }
 
-            sb.Append("],");
+            sb.Append(']');
+
+            if (nativeTools != null && nativeTools.Count > 0)
+            {
+                sb.Append(",\"tools\":[");
+                for (int i = 0; i < nativeTools.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    NativeToolDefinition tool = nativeTools[i];
+                    sb.Append("{\"type\":\"function\",\"function\":{");
+                    sb.Append($"\"name\":\"{EscapeJson(tool?.Name)}\",");
+                    sb.Append($"\"description\":\"{EscapeJson(tool?.Description)}\",");
+                    sb.Append("\"parameters\":");
+                    sb.Append(string.IsNullOrWhiteSpace(tool?.ParametersJson) ? "{}" : tool.ParametersJson);
+                    sb.Append(",\"strict\":true}}");
+                }
+                sb.Append("],\"tool_choice\":\"auto\",\"parallel_tool_calls\":true");
+            }
+
+            sb.Append(',');
 
             RimChatSettings globalSettings = RimChatMod.Settings;
             bool thinkingEnabled = globalSettings?.ThinkingEnabled ?? false;

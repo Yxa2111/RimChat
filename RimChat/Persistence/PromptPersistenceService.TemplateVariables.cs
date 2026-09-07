@@ -889,10 +889,9 @@ namespace RimChat.Persistence
 
         private static string BuildResponseContractBodyVariableValue(DialogueScenarioContext context)
         {
-            return "Return exactly one JSON object. Required key: visible_dialogue. "
-                 + "Optional key: actions (array of {action, parameters} objects). "
-                 + "visible_dialogue must be a single in-character line. "
-                 + "If making an execution commitment, include matching action in actions array.";
+            return "Return the final in-character dialogue as ordinary text. "
+                 + "Use the supplied native function tools for gameplay effects, read every tool result, "
+                 + "and continue with more tool calls or a final reply as needed. Do not emit an actions JSON block.";
         }
     }
 }

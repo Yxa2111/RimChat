@@ -113,22 +113,14 @@ namespace RimChat.UI
 
             if (prepareResult.Data is ItemAirdropPendingSelectionData pendingSelection)
             {
-                TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.SelectingCandidate, pendingSelection.FailureCode ?? "selection_pending");
-                if (DeterminePendingSelectionResolution(pendingSelection) == AirdropPendingResolution.AutoPickTop1 &&
-                    TryAutoPickPendingAirdropSelection(sourceAction, pendingSelection, currentSession, currentFaction, out _))
-                {
-                    SaveFactionMemory(currentSession, currentFaction);
-                }
-                else
-                {
-                    CacheAirdropPendingSelectionIntent(currentSession, sourceAction, pendingSelection);
-                    currentSession.AddMessage(
-                        "System",
-                        "RimChat_ItemAirdropCommitFailedSystem".Translate(BuildAirdropPendingSelectionSystemText(pendingSelection)),
-                        false,
-                        DialogueMessageType.System);
-                    SaveFactionMemory(currentSession, currentFaction);
-                }
+                MarkAirdropTradeCardFailed(sourceAction, currentSession);
+                TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Failed, pendingSelection.FailureCode ?? "selection_pending");
+                currentSession.AddMessage(
+                    "System",
+                    "RimChat_ItemAirdropCommitFailedSystem".Translate(BuildAirdropPendingSelectionSystemText(pendingSelection)),
+                    false,
+                    DialogueMessageType.System);
+                SaveFactionMemory(currentSession, currentFaction);
                 return;
             }
 
@@ -153,7 +145,11 @@ namespace RimChat.UI
                 ResetAirdropConfirmationRuntime(currentSession, "async_prepared_trade_ready", true, false);
                 MarkAirdropTradeCardAwaitingConfirm(sourceAction, currentSession);
                 TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.PreparedAwaitingConfirm, preparedTrade.SelectedDefName ?? "prepared_trade");
-                ShowAirdropTradeConfirmationDialog(currentSession, currentFaction, preparedTrade, null, null);
+                ShowAirdropTradeConfirmationDialog(
+                    currentSession,
+                    currentFaction,
+                    preparedTrade,
+                    preparedTrade.ParametersSnapshot ?? sourceAction.Parameters);
                 SaveFactionMemory(currentSession, currentFaction);
             }
         }

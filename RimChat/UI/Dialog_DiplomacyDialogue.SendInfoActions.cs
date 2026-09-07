@@ -25,8 +25,7 @@ namespace RimChat.UI
                 string raidLabelKey,
                 string forcedActionType,
                 bool requiresConfirmation,
-                bool requiresRandomWaves = false,
-                bool explicitChallengeRequest = false)
+                bool requiresRandomWaves = false)
             {
                 LabelKey = labelKey;
                 DescriptionKey = descriptionKey;
@@ -34,7 +33,6 @@ namespace RimChat.UI
                 ForcedActionType = forcedActionType;
                 RequiresConfirmation = requiresConfirmation;
                 RequiresRandomWaves = requiresRandomWaves;
-                ExplicitChallengeRequest = explicitChallengeRequest;
             }
 
             public string LabelKey { get; }
@@ -49,7 +47,6 @@ namespace RimChat.UI
 
             public bool RequiresRandomWaves { get; }
 
-            public bool ExplicitChallengeRequest { get; }
         }
 
         private sealed class Dialog_SendInfoTauntPicker : Window
@@ -116,8 +113,7 @@ namespace RimChat.UI
                 "RimChat_SendInfoTauntOptionJointDesc",
                 "RimChat_SendInfoRaidLabelJoint",
                 AIActionNames.RequestRaidCallEveryone,
-                true,
-                explicitChallengeRequest: true)
+                true)
         };
 
         private void TryStartManualTauntSend()
@@ -204,7 +200,7 @@ namespace RimChat.UI
             }
 
             int? randomWaves = option.RequiresRandomWaves ? Rand.RangeInclusive(2, 6) : (int?)null;
-            return BuildSendInfoHiddenDirective(option.ForcedActionType, randomWaves, option.ExplicitChallengeRequest);
+            return BuildSendInfoHiddenDirective(option.ForcedActionType, randomWaves);
         }
 
         private string BuildTauntHiddenDirectiveForCurrentFaction(TauntSendInfoOption option)
@@ -220,7 +216,6 @@ namespace RimChat.UI
         private static string BuildSendInfoHiddenDirective(
             string forcedActionType,
             int? waves = null,
-            bool explicitChallengeRequest = false,
             string extraParameterLines = null)
         {
             if (string.IsNullOrWhiteSpace(forcedActionType))
@@ -229,10 +224,6 @@ namespace RimChat.UI
             }
 
             string wavesLine = waves.HasValue ? $"\nwaves: {waves.Value}" : string.Empty;
-            string explicitLine = explicitChallengeRequest ? "\nexplicit_challenge_request: true" : string.Empty;
-            string challengeLine = explicitChallengeRequest
-                ? "\nchallenge_phrase: call everyone | joint raid | 一起上 | 联合袭击"
-                : string.Empty;
             string extraLines = string.IsNullOrWhiteSpace(extraParameterLines)
                 ? string.Empty
                 : "\n" + extraParameterLines.Trim();
@@ -241,8 +232,6 @@ namespace RimChat.UI
                 "source: manual_send_info\n" +
                 $"force_action: {forcedActionType}" +
                 wavesLine +
-                explicitLine +
-                challengeLine +
                 extraLines +
                 "\nrequire_matching_action: true\n" +
                 "[/SendInfoDirective]\n" +
@@ -310,15 +299,18 @@ namespace RimChat.UI
                 return;
             }
 
-            bool queued = conversationController.TrySendDialogueRequest(
+            List<NativeToolDefinition> nativeTools = NativeToolCatalog.Build(currentFaction, currentSession);
+            bool queued = conversationController.TrySendNativeToolDialogueRequest(
                 currentSession,
                 currentFaction,
                 chatMessages,
+                nativeTools,
                 requestContext,
                 windowInstanceId,
-                onSuccess: envelope =>
+                executeTools: calls => ExecuteNativeToolCalls(calls, currentSession, currentFaction),
+                onSuccess: response =>
                 {
-                    AddAIResponseToSession(envelope, currentSession, currentFaction, aiDriverMessage);
+                    AddNativeAIResponseToSession(response, currentSession, currentFaction);
                 },
                 onError: error =>
                 {

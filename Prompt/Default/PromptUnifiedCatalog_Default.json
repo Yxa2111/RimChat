@@ -28,7 +28,7 @@
                 },
                 {
                     "SectionId": "action_rules",
-                    "Content": "动作使用最小化：仅在确有 gameplay 效果需求时使用动作。凡出现执行承诺，必须同条回复附带匹配 actions JSON。"
+                    "Content": "仅在确有 gameplay 效果时调用本轮提供的 function tools。读取每个 tool result 后继续调用或生成最终角色内台词；不要输出 actions JSON。"
                 },
                 {
                     "SectionId": "repetition_reinforcement",

@@ -2822,4 +2822,13 @@ ID：{5}
     <RimChat_AirdropMultipleItems>多种物资</RimChat_AirdropMultipleItems>
     <RimChat_AirdropFactionDelivers>派系交付</RimChat_AirdropFactionDelivers>
     <RimChat_AirdropPlayerPays>玩家支付</RimChat_AirdropPlayerPays>
+    <RimChat_NativeToolFailureSystem>工具 {0} 执行失败 [{1}]：{2}</RimChat_NativeToolFailureSystem>
+    <RimChat_AirdropTradeCard_Status_Pending>待协商</RimChat_AirdropTradeCard_Status_Pending>
+    <RimChat_AirdropTradeCard_Status_Preparing>准备中</RimChat_AirdropTradeCard_Status_Preparing>
+    <RimChat_AirdropTradeCard_Status_AwaitingPlayerConfirm>待玩家确认</RimChat_AirdropTradeCard_Status_AwaitingPlayerConfirm>
+    <RimChat_AirdropTradeCard_Status_Executing>执行中</RimChat_AirdropTradeCard_Status_Executing>
+    <RimChat_AirdropTradeCard_Status_Completed>已完成</RimChat_AirdropTradeCard_Status_Completed>
+    <RimChat_AirdropTradeCard_Status_Cancelled>已取消</RimChat_AirdropTradeCard_Status_Cancelled>
+    <RimChat_AirdropTradeCard_Status_Superseded>已替代</RimChat_AirdropTradeCard_Status_Superseded>
+    <RimChat_AirdropTradeCard_Status_History>历史记录</RimChat_AirdropTradeCard_Status_History>
 </LanguageData>

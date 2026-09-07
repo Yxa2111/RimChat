@@ -131,7 +131,6 @@ namespace RimChat.UI
             if (!TryEnsureRansomTargetParameter(action, currentSession, currentFaction, out Pawn resolvedTarget, allowSelectionPrompt: true))
             {
                 string pendingMessage = ResolveRansomPendingMessage(currentSession);
-                currentSession?.AddMessage("System", pendingMessage, false, DialogueMessageType.System);
                 Log.Warning("[RimChat] pay_prisoner_ransom pending: missing valid target_pawn_load_id, selection requested.");
                 outcome = ActionExecutionOutcome.Failure(action, pendingMessage);
                 return true;
@@ -139,11 +138,6 @@ namespace RimChat.UI
 
             if (!TryReadPositiveInt(action.Parameters, "offer_silver", out _))
             {
-                currentSession?.AddMessage(
-                    "System",
-                    "RimChat_RansomNeedOfferSystem".Translate(resolvedTarget?.LabelShortCap ?? "Unknown").ToString(),
-                    false,
-                    DialogueMessageType.System);
                 outcome = ActionExecutionOutcome.Failure(action, "RimChat_RansomNeedOfferSystem".Translate(resolvedTarget?.LabelShortCap ?? "Unknown").ToString());
                 return true;
             }
@@ -672,15 +666,18 @@ namespace RimChat.UI
                 return;
             }
 
-            bool queued = conversationController.TrySendDialogueRequest(
+            List<NativeToolDefinition> nativeTools = NativeToolCatalog.Build(currentFaction, currentSession);
+            bool queued = conversationController.TrySendNativeToolDialogueRequest(
                 currentSession,
                 currentFaction,
                 chatMessages,
+                nativeTools,
                 requestContext,
                 windowInstanceId,
-                onSuccess: envelope =>
+                executeTools: calls => ExecuteNativeToolCalls(calls, currentSession, currentFaction),
+                onSuccess: response =>
                 {
-                    AddAIResponseToSession(envelope, currentSession, currentFaction, playerMessage);
+                    AddNativeAIResponseToSession(response, currentSession, currentFaction);
                 },
                 onError: error =>
                 {

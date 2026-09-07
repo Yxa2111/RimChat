@@ -105,27 +105,10 @@ namespace RimChat.Memory
         public int pendingAirdropTradeCardShippingPodCount = 0;
         public int pendingAirdropTradeCardShippingCost = 0;
 
-        // Last AI airdrop counteroffer cache (session-scoped)
-        public string lastAirdropCounterofferDefName = string.Empty;
-        public int lastAirdropCounterofferCount = 0;
-        public int lastAirdropCounterofferSilver = 0;
-        public string lastAirdropCounterofferReason = string.Empty;
-        public int lastAirdropCounterofferTick = 0;
-        
         // 策略建议运行态 (不save到存档)
         public List<PendingStrategySuggestion> pendingStrategySuggestions = new List<PendingStrategySuggestion>();
         public int strategyUsesConsumed = 0;
 
-        // 外交延迟动作意图运行态 (不save到存档)
-        public PendingDelayedActionIntent pendingDelayedActionIntent;
-        public PendingDelayedActionIntent lastDelayedActionIntent;
-        public string lastDelayedActionExecutionSignature = string.Empty;
-        public int lastDelayedActionExecutionAssistantRound = -999;
-
-        // Diplomacy fallback retry runtime state (not persisted)
-        public string lastPlayerRequestText = string.Empty;
-        public bool lastPlayerRequestWasAirdropTradeCard = false;
-        public bool lastAssistantMessageWasImmersionFallback = false;
         public string lastAssistantVisibleText = string.Empty;
 
         // Periodic snapshot tracking: last message index already summarized to RPG archive
@@ -366,7 +349,8 @@ namespace RimChat.Memory
                 airdropTradeCardStatusByRequestId = new Dictionary<string, AirdropTradeCardStatus>(StringComparer.Ordinal);
             }
 
-            if (airdropTradeCardStatusByRequestId.TryGetValue(normalizedRequestId, out AirdropTradeCardStatus previousStatus) &&
+            bool hadPreviousStatus = airdropTradeCardStatusByRequestId.TryGetValue(normalizedRequestId, out AirdropTradeCardStatus previousStatus);
+            if (hadPreviousStatus &&
                 (previousStatus == AirdropTradeCardStatus.Completed ||
                  previousStatus == AirdropTradeCardStatus.Cancelled ||
                  previousStatus == AirdropTradeCardStatus.Superseded) &&
@@ -376,6 +360,10 @@ namespace RimChat.Memory
             }
 
             airdropTradeCardStatusByRequestId[normalizedRequestId] = status;
+            if (!hadPreviousStatus || previousStatus != status)
+            {
+                messageVersion++;
+            }
             if (string.Equals(pendingAirdropTradeCardRequestId, normalizedRequestId, StringComparison.Ordinal))
             {
                 pendingAirdropTradeCardStatus = status;
@@ -435,42 +423,6 @@ namespace RimChat.Memory
             pendingAirdropRequestTimeoutSeconds = 0;
             airdropRequestGeneration++;
             airdropExecutionStage = AirdropExecutionStage.Idle;
-            ClearPendingAirdropSelectionIntentState();
-        }
-
-        public bool HasPendingAirdropSelectionIntent()
-        {
-            return HasPendingAirdropSelectionPayload(pendingDelayedActionIntent?.Parameters) ||
-                   HasPendingAirdropSelectionPayload(lastDelayedActionIntent?.Parameters);
-        }
-
-        public bool ClearPendingAirdropSelectionIntentState()
-        {
-            bool cleared = false;
-            if (HasPendingAirdropSelectionPayload(pendingDelayedActionIntent?.Parameters))
-            {
-                pendingDelayedActionIntent = null;
-                cleared = true;
-            }
-
-            if (HasPendingAirdropSelectionPayload(lastDelayedActionIntent?.Parameters))
-            {
-                lastDelayedActionIntent = null;
-                cleared = true;
-            }
-
-            return cleared;
-        }
-
-        private static bool HasPendingAirdropSelectionPayload(Dictionary<string, object> parameters)
-        {
-            if (parameters == null)
-            {
-                return false;
-            }
-
-            return parameters.ContainsKey("__airdrop_pending_candidates") ||
-                   parameters.ContainsKey("__airdrop_pending_failure_code");
         }
 
         public bool TryBuildPendingAirdropTradeCardReference(out string referenceBlock)
@@ -483,6 +435,9 @@ namespace RimChat.Memory
 
             if (pendingNeedItems.Count > 0 && pendingPaymentItems.Count > 0)
             {
+                float needMarketTotal = pendingNeedItems.Sum(line => Math.Max(0f, line?.UnitPrice ?? 0f) * Math.Max(0, line?.Count ?? 0));
+                float paymentMarketTotal = pendingPaymentItems.Sum(line => Math.Max(0f, line?.UnitPrice ?? 0f) * Math.Max(0, line?.Count ?? 0));
+                float quoteWithShipping = needMarketTotal + Math.Max(0, pendingAirdropTradeCardShippingCost);
                 referenceBlock = "[AirdropTradeCardReference]\n" +
                     $"request_id: {pendingAirdropTradeCardRequestId}\nstatus: {pendingAirdropTradeCardStatus}\n" +
                     $"faction_id: {faction?.GetUniqueLoadID()}\n" +
@@ -490,6 +445,8 @@ namespace RimChat.Memory
                     $"payment_items (player pays faction): [{ItemAirdropBasket.Reference(pendingPaymentItems)}]\n" +
                     $"scenario: {pendingAirdropTradeCardScenario}\nshipping_pods: {pendingAirdropTradeCardShippingPodCount}\n" +
                     $"shipping_cost_silver: {pendingAirdropTradeCardShippingCost}\n" +
+                    $"need_market_total: {needMarketTotal:F2}\npayment_market_total: {paymentMarketTotal:F2}\n" +
+                    $"quote_with_shipping: {quoteWithShipping:F2}\npayment_minus_quote: {(paymentMarketTotal - quoteWithShipping):F2}\n" +
                     "Accept the ENTIRE basket only with accept_item_airdrop(request_id). Never modify any line or split it into separate actions. " +
                     "Refusal/counteroffer leaves this ID pending. All older revised IDs are invalid. Wait for player confirmation before claiming completion.\n" +
                     "[/AirdropTradeCardReference]";
@@ -826,20 +783,6 @@ namespace RimChat.Memory
             return true;
         }
 
-        public void CacheAirdropCounteroffer(string defName, int count, int silver, string reason)
-        {
-            if (string.IsNullOrWhiteSpace(defName) || count <= 0 || silver < 0)
-            {
-                return;
-            }
-
-            lastAirdropCounterofferDefName = defName.Trim();
-            lastAirdropCounterofferCount = Math.Max(1, count);
-            lastAirdropCounterofferSilver = Math.Max(0, silver);
-            lastAirdropCounterofferReason = reason ?? string.Empty;
-            lastAirdropCounterofferTick = Find.TickManager?.TicksGame ?? 0;
-        }
-
         public bool HasPendingImageRequests()
         {
             return pendingImageRequests > 0;
@@ -908,11 +851,6 @@ namespace RimChat.Memory
             Scribe_Values.Look(ref reinitiateAvailableTick, "reinitiateAvailableTick", 0);
             Scribe_Values.Look(ref lastSummarizedMessageIndex, "lastSummarizedMessageIndex", 0);
             Scribe_Values.Look(ref messageVersion, "messageVersion", 0);
-            Scribe_Values.Look(ref lastAirdropCounterofferDefName, "lastAirdropCounterofferDefName", string.Empty);
-            Scribe_Values.Look(ref lastAirdropCounterofferCount, "lastAirdropCounterofferCount", 0);
-            Scribe_Values.Look(ref lastAirdropCounterofferSilver, "lastAirdropCounterofferSilver", 0);
-            Scribe_Values.Look(ref lastAirdropCounterofferReason, "lastAirdropCounterofferReason", string.Empty);
-            Scribe_Values.Look(ref lastAirdropCounterofferTick, "lastAirdropCounterofferTick", 0);
             Scribe_Values.Look(ref hasPendingRansomBatchSelection, "hasPendingRansomBatchSelection", false);
             Scribe_Values.Look(ref pendingRansomBatchGroupId, "pendingRansomBatchGroupId", string.Empty);
             Scribe_Collections.Look(ref pendingRansomBatchTargetPawnLoadIds, "pendingRansomBatchTargetPawnLoadIds", LookMode.Value);
@@ -941,43 +879,6 @@ namespace RimChat.Memory
         public string FactReason = string.Empty;
         public List<string> StrategyKeywords = new List<string>();
         public string Content = string.Empty;
-    }
-
-    /// <summary>/// 外交延迟动作运行态意图（不持久化）。
-    ///</summary>
-    public class PendingDelayedActionIntent
-    {
-        public string ActionType = string.Empty;
-        public Dictionary<string, object> Parameters = new Dictionary<string, object>();
-        public string Signature = string.Empty;
-        public string RequiredParameter = string.Empty;
-        public bool AwaitingConfirmation;
-        public int CreatedAssistantRound;
-        public int UpdatedAssistantRound;
-
-        public PendingDelayedActionIntent Clone()
-        {
-            var clone = new PendingDelayedActionIntent
-            {
-                ActionType = ActionType ?? string.Empty,
-                Signature = Signature ?? string.Empty,
-                RequiredParameter = RequiredParameter ?? string.Empty,
-                AwaitingConfirmation = AwaitingConfirmation,
-                CreatedAssistantRound = CreatedAssistantRound,
-                UpdatedAssistantRound = UpdatedAssistantRound,
-                Parameters = new Dictionary<string, object>()
-            };
-
-            if (Parameters != null)
-            {
-                foreach (KeyValuePair<string, object> entry in Parameters)
-                {
-                    clone.Parameters[entry.Key] = entry.Value;
-                }
-            }
-
-            return clone;
-        }
     }
 
     /// <summary>/// 可序列化的dialoguemessage数据

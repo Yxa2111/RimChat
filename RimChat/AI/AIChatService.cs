@@ -16,6 +16,9 @@ namespace RimChat.AI
     {
         public string role;
         public string content;
+        public List<NativeToolCall> tool_calls;
+        public string tool_call_id;
+        public string name;
     }
 
     [Obsolete("Use AIChatServiceAsync instead. This synchronous service uses Thread.Sleep which blocks the main thread and can freeze the game on network errors.")]

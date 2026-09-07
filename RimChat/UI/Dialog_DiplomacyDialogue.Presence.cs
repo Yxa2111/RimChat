@@ -234,8 +234,13 @@ namespace RimChat.UI
             session.AddMessage("System", "RimChat_ConversationReinitiated".Translate(), false, DialogueMessageType.System);
         }
 
-        private bool TryHandlePresenceAction(AIAction action, FactionDialogueSession currentSession, Faction currentFaction)
+        private bool TryHandlePresenceAction(
+            AIAction action,
+            FactionDialogueSession currentSession,
+            Faction currentFaction,
+            out ActionExecutionOutcome outcome)
         {
+            outcome = null;
             if (action == null || string.IsNullOrEmpty(action.ActionType))
             {
                 return false;
@@ -250,8 +255,16 @@ namespace RimChat.UI
 
             if (!(RimChat.Core.RimChatMod.Instance?.InstanceSettings?.EnableFactionPresenceStatus ?? true))
             {
-                Log.Message($"[RimChat] Presence action ignored because presence system is disabled: {action.ActionType}");
-                return false;
+                string message = $"Presence system is disabled for {action.ActionType}.";
+                Log.Message($"[RimChat] {message}");
+                outcome = ActionExecutionOutcome.Failure(action, message);
+                return true;
+            }
+
+            if (currentSession == null || currentFaction == null || GameComponent_DiplomacyManager.Instance == null)
+            {
+                outcome = ActionExecutionOutcome.Failure(action, "Presence action requires a live faction dialogue session.");
+                return true;
             }
 
             bool wasConversationEnded = currentSession?.isConversationEndedByNpc ?? false;
@@ -274,6 +287,7 @@ namespace RimChat.UI
 
             TryPlayAiConversationEndedSound(currentSession, wasConversationEnded);
 
+            outcome = ActionExecutionOutcome.Success(action, BuildPresenceSystemMessage(action.ActionType, reason));
             return true;
         }
 
@@ -282,36 +296,6 @@ namespace RimChat.UI
             return actionType == AIActionNames.ExitDialogue ||
                    actionType == AIActionNames.GoOffline ||
                    actionType == AIActionNames.SetDnd;
-        }
-
-        private void TryAutoApplyPresenceFallback(string dialogueText, FactionDialogueSession currentSession, Faction currentFaction)
-        {
-            if (currentSession == null || currentFaction == null || currentSession.isConversationEndedByNpc)
-            {
-                return;
-            }
-
-            if (HasStrategyUsesRemaining(currentSession))
-            {
-                return;
-            }
-
-            if (!(RimChat.Core.RimChatMod.Instance?.InstanceSettings?.EnableFactionPresenceStatus ?? true))
-            {
-                return;
-            }
-
-            string actionType = DetectAutoPresenceAction(dialogueText, currentFaction);
-            if (string.IsNullOrEmpty(actionType))
-            {
-                return;
-            }
-
-            bool wasConversationEnded = currentSession.isConversationEndedByNpc;
-            GameComponent_DiplomacyManager.Instance?.ApplyPresenceAction(currentFaction, actionType, string.Empty, currentSession);
-            currentSession.AddMessage("System", BuildPresenceSystemMessage(actionType, string.Empty), false, DialogueMessageType.System);
-            TryPlayAiConversationEndedSound(currentSession, wasConversationEnded);
-            Log.Message($"[RimChat] Presence fallback action applied: {actionType}, faction={currentFaction.Name}");
         }
 
         private void TryPlayAiConversationEndedSound(FactionDialogueSession currentSession, bool wasConversationEnded)
@@ -323,47 +307,6 @@ namespace RimChat.UI
 
             SoundDef shutdownSound = DefDatabase<SoundDef>.GetNamed(AiConversationEndSoundDefName, false);
             shutdownSound?.PlayOneShotOnCamera();
-        }
-
-        private string DetectAutoPresenceAction(string dialogueText, Faction currentFaction)
-        {
-            string text = (dialogueText ?? string.Empty).ToLowerInvariant();
-
-            if (ContainsAny(text, "停止联系", "别再联系", "滚开", "拉黑", "不再回应", "leave me alone", "stop contacting"))
-            {
-                return AIActionNames.GoOffline;
-            }
-
-            if (ContainsAny(text, "请勿打扰", "不要打扰", "忙不过来", "稍后再说", "do not disturb", "don't disturb"))
-            {
-                return AIActionNames.SetDnd;
-            }
-
-            if (currentFaction.PlayerGoodwill <= -75 &&
-                ContainsAny(text, "威胁", "挑衅", "冒犯", "threat", "insult"))
-            {
-                return AIActionNames.ExitDialogue;
-            }
-
-            return null;
-        }
-
-        private bool ContainsAny(string source, params string[] tokens)
-        {
-            if (string.IsNullOrEmpty(source) || tokens == null)
-            {
-                return false;
-            }
-
-            for (int i = 0; i < tokens.Length; i++)
-            {
-                if (!string.IsNullOrEmpty(tokens[i]) && source.Contains(tokens[i]))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private string BuildPresenceSystemMessage(string actionType, string reason)

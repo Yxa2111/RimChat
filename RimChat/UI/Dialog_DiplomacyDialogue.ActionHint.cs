@@ -62,8 +62,6 @@ namespace RimChat.UI
             ["caravan_hostile"] = "RimChat_ActionsHint_Reason_CaravanHostile",
             ["visitor_hostile"] = "RimChat_ActionsHint_Reason_VisitorHostile",
             ["raid_not_hostile"] = "RimChat_ActionsHint_Reason_RaidNotHostile",
-            ["call_everyone_requires_post_raid_escalation"] = "RimChat_ActionsHint_Reason_CallEveryonePostRaidOnly",
-            ["raid_waves_requires_call_everyone_unavailable"] = "RimChat_ActionsHint_Reason_RaidWavesRequiresCallEveryoneUnavailable",
             ["no_factions"] = "RimChat_ActionsHint_Reason_NoFactionsAvailable",
             ["already_hostile"] = "RimChat_ActionsHint_Reason_AlreadyHostile",
             ["war_goodwill_too_high"] = "RimChat_ActionsHint_Reason_WarGoodwillTooHigh",

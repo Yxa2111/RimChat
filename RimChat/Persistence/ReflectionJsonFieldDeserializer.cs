@@ -13,6 +13,11 @@ namespace RimChat.Persistence
     /// </summary>
     internal static class ReflectionJsonFieldDeserializer
     {
+        internal static bool TryParseUntyped(string json, out object value)
+        {
+            return TryParseRoot(json, out value);
+        }
+
         public static bool TryDeserialize<T>(string json, out T value) where T : class
         {
             value = null;

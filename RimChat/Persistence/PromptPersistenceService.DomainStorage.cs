@@ -503,11 +503,11 @@ namespace RimChat.Persistence
             DiplomacyDialoguePromptDomainConfig diplomacyPrompt)
         {
             List<ApiActionConfig> actions = CloneApiActions(diplomacyPrompt?.ApiActions);
-            EnsureRequiredRaidVariantActions(actions);
+            EnsureRequiredApiActions(actions);
             return actions;
         }
 
-        private static void EnsureRequiredRaidVariantActions(List<ApiActionConfig> actions)
+        private static void EnsureRequiredApiActions(List<ApiActionConfig> actions)
         {
             if (actions == null)
             {
@@ -527,6 +527,13 @@ namespace RimChat.Persistence
                 PromptTextConstants.RequestRaidWavesActionDescription,
                 PromptTextConstants.RequestRaidWavesActionParameters,
                 PromptTextConstants.RequestRaidWavesActionRequirement);
+
+            EnsureAction(
+                actions,
+                "accept_item_airdrop",
+                "Accept the complete immutable pending airdrop quote by request_id. A previous refusal does not prevent accepting the same id later.",
+                "request_id (string, REQUIRED; copy exactly from [AirdropTradeCardReference])",
+                "Use only when a current trade card exists. Copy request_id exactly and do not include item, count, payment, or price parameters. Expired, cancelled, superseded, or cross-faction ids fail. Preparing, awaiting confirmation, executing, and completed states report their status without executing twice.");
         }
 
         private static void EnsureAction(

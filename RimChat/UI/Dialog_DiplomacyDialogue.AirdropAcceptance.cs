@@ -17,73 +17,6 @@ namespace RimChat.UI
     {
         private const string AirdropTradeCardRequestIdParameterKey = "__airdrop_trade_card_request_id";
 
-        private static bool IsAcceptItemAirdropAction(AIAction action)
-        {
-            return action != null &&
-                   string.Equals(action.ActionType, AIActionNames.AcceptItemAirdrop, StringComparison.Ordinal);
-        }
-
-        private static bool TryExpandAirdropAcceptanceActions(
-            ParsedResponse response,
-            FactionDialogueSession currentSession)
-        {
-            if (response?.Actions == null || response.Actions.Count == 0)
-            {
-                return true;
-            }
-
-            List<AIAction> acceptActions = response.Actions.Where(IsAcceptItemAirdropAction).ToList();
-            List<AIAction> directAirdropActions = response.Actions
-                .Where(IsRequestItemAirdropAction)
-                .ToList();
-
-            if (acceptActions.Count > 1 || (acceptActions.Count > 0 && directAirdropActions.Count > 0))
-            {
-                response.Actions = response.Actions
-                    .Where(action => !IsAcceptItemAirdropAction(action) && !IsRequestItemAirdropAction(action))
-                    .ToList();
-                response.DialogueText = "RimChat_ItemAirdropAcceptConflict".Translate().ToString();
-                return false;
-            }
-
-            if (acceptActions.Count > 0)
-            {
-                AIAction acceptAction = acceptActions[0];
-                if (!TryBuildAcceptedAirdropAction(acceptAction, currentSession, out AIAction fulfillmentAction, out string failureMessage))
-                {
-                    response.Actions = response.Actions
-                        .Where(action => !IsAcceptItemAirdropAction(action))
-                        .ToList();
-                    response.DialogueText = string.IsNullOrWhiteSpace(failureMessage)
-                        ? "RimChat_ItemAirdropAcceptInvalidRequest".Translate().ToString()
-                        : failureMessage;
-                    return false;
-                }
-
-                response.Actions = response.Actions
-                    .Select(action => ReferenceEquals(action, acceptAction) ? fulfillmentAction : action)
-                    .ToList();
-            }
-
-            // Once a trade card is active, the old free-form request action must not bypass its request id.
-            if (currentSession?.hasPendingAirdropTradeCardReference == true)
-            {
-                List<AIAction> bypassActions = response.Actions
-                    .Where(action => IsRequestItemAirdropAction(action) && !HasAirdropTradeCardRequestId(action))
-                    .ToList();
-                if (bypassActions.Count > 0)
-                {
-                    response.Actions = response.Actions
-                        .Where(action => !bypassActions.Contains(action))
-                        .ToList();
-                    response.DialogueText = "RimChat_ItemAirdropAcceptUseRequestId".Translate().ToString();
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         private static bool TryBuildAcceptedAirdropAction(
             AIAction acceptAction,
             FactionDialogueSession currentSession,
@@ -101,6 +34,18 @@ namespace RimChat.UI
             if (!TryReadAirdropTradeCardRequestId(acceptAction?.Parameters, out string suppliedRequestId))
             {
                 failureMessage = "RimChat_ItemAirdropAcceptRequestIdRequired".Translate().ToString();
+                return false;
+            }
+
+            FactionDialogueSession owningSession = GameComponent_DiplomacyManager.Instance?
+                .GetAllDialogueSessions()?
+                .FirstOrDefault(candidate =>
+                    candidate != null &&
+                    !ReferenceEquals(candidate, currentSession) &&
+                    candidate.TryGetAirdropTradeCardStatus(suppliedRequestId, out _));
+            if (owningSession != null)
+            {
+                failureMessage = "RimChat_ItemAirdropAcceptFactionMismatch".Translate(suppliedRequestId).ToString();
                 return false;
             }
 

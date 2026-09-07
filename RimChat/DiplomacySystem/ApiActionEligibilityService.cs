@@ -85,7 +85,6 @@ namespace RimChat.DiplomacySystem
         private const string OrbitalTraderContextParameterKey = "orbital_trader_context";
         private const string DialogueSourceParameterKey = "dialogue_source";
         private const string OrbitalTraderDialogueSource = "orbital_trader";
-        private const string ExplicitChallengeRequestParameterKey = "explicit_challenge_request";
         private const string BestowingCeremonyQuestDefName = "BestowingCeremony";
 
         private ApiActionEligibilityService()
@@ -209,13 +208,6 @@ namespace RimChat.DiplomacySystem
                         {
                             return waveCooldown;
                         }
-                    }
-
-                    if (ValidateRaidCallEveryoneAvailability(faction, parameters, checkCooldown: true).Allowed)
-                    {
-                        return ActionValidationResult.Denied(
-                            "raid_waves_requires_call_everyone_unavailable",
-                            "request_raid_waves is normally unavailable. It should only trigger when request_raid_call_everyone is unavailable, or when the player explicitly requests a challenge.");
                     }
 
                     return ActionValidationResult.AllowedResult();
@@ -1009,13 +1001,6 @@ namespace RimChat.DiplomacySystem
                     remainingSeconds);
             }
 
-            if (!HasRecentRaidIntentForFaction(faction, 7) && !HasExplicitChallengeRequest(parameters))
-            {
-                return ActionValidationResult.Denied(
-                    "call_everyone_requires_post_raid_escalation",
-                    "request_raid_call_everyone is normally unavailable. It should only trigger when provocation continues after a raid, or when the player explicitly requests a challenge.");
-            }
-
             var allFactions = Find.FactionManager.AllFactions
                 .Where(f => !f.IsPlayer && !f.defeated && !f.def.hidden)
                 .ToList();
@@ -1025,39 +1010,6 @@ namespace RimChat.DiplomacySystem
             }
 
             return ActionValidationResult.AllowedResult();
-        }
-
-        private static bool HasExplicitChallengeRequest(Dictionary<string, object> parameters)
-        {
-            return TryReadBoolParameter(parameters, ExplicitChallengeRequestParameterKey, out bool explicitRequest) &&
-                   explicitRequest;
-        }
-
-        private static bool HasRecentRaidIntentForFaction(Faction faction, int windowDays)
-        {
-            if (faction == null || windowDays <= 0)
-            {
-                return false;
-            }
-
-            WorldEventLedgerComponent ledger = WorldEventLedgerComponent.Instance;
-            if (ledger == null)
-            {
-                return false;
-            }
-
-            string sourcePrefix = $"raid-intent:{faction.GetUniqueLoadID()}:";
-            List<WorldEventRecord> records = ledger.GetRecentWorldEvents(
-                observerFaction: faction,
-                daysWindow: windowDays,
-                includePublic: true,
-                includeDirect: true);
-
-            return records.Any(record =>
-                record != null &&
-                string.Equals(record.EventType, "raid_intent", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(record.SourceKey) &&
-                record.SourceKey.StartsWith(sourcePrefix, StringComparison.Ordinal));
         }
 
         private static bool IsAncientQuestTemplateName(string questDefName)

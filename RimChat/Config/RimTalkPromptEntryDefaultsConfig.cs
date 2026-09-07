@@ -27,6 +27,10 @@ namespace RimChat.Config
             "可用上下文：当前派系={{ world.faction.name }}；发起者={{ pawn.initiator.name }}；目标={{ pawn.target.name }}；目标档案={{ pawn.target.profile }}；发起者档案={{ pawn.initiator.profile }}。";
         private const string LegacyAnyActions =
             "行动规则：仅在确有游戏效果需求时使用动作契约。优先遵循 {{ dialogue.api_limits_body }} 与 {{ dialogue.quest_guidance_body }}，动作要最小化、可解释、与当前语境一致。";
+        private const string LegacyCurrentAnyActions =
+            "动作使用最小化：仅在确有 gameplay 效果需求时使用动作；具体门槛、任务限制与动作合同以独立节点中的 `api_limits`、`quest_guidance`、`response_contract` 为准。";
+        private const string LegacyActionsJson =
+            "动作使用最小化：仅在确有 gameplay 效果需求时使用动作。凡出现执行承诺，必须同条回复附带匹配 actions JSON。";
         private const string LegacyAnyReinforcement =
             "重复抑制：避免逐轮复读同一措辞。若上一轮已给出明确结论，本轮仅做必要补充；如需拒绝，给出角色内理由并保持口径一致。";
         private const string LegacyAnyOutput =
@@ -47,7 +51,7 @@ namespace RimChat.Config
         private const string CurrentAnyContext =
             "上下文快照：派系={{ world.faction.name }}；发起者={{ pawn.initiator.name }}；目标={{ pawn.target.name }}；目标档案={{ pawn.target.profile }}；发起者档案={{ pawn.initiator.profile }}。";
         private const string CurrentAnyActions =
-            "动作使用最小化：仅在确有 gameplay 效果需求时使用动作；具体门槛、任务限制与动作合同以独立节点中的 `api_limits`、`quest_guidance`、`response_contract` 为准。";
+            "仅在确有 gameplay 效果时调用本轮提供的 function tools；具体门槛与任务限制以独立节点中的 `api_limits`、`quest_guidance`、`response_contract` 为准。";
         private const string CurrentAnyReinforcement =
             "避免逐轮复读。若上一轮已给出明确结论，本轮只补充必要差异；拒绝时给角色内理由并保持口径一致。";
         private const string CurrentAnyOutput =
@@ -227,6 +231,8 @@ namespace RimChat.Config
             changed |= ReplaceExactSectionText(anyChannel, "environment_perception", LegacyAnyEnvironment, CurrentAnyEnvironment);
             changed |= ReplaceExactSectionText(anyChannel, "context", LegacyAnyContext, CurrentAnyContext);
             changed |= ReplaceExactSectionText(anyChannel, "action_rules", LegacyAnyActions, CurrentAnyActions);
+            changed |= ReplaceExactSectionText(anyChannel, "action_rules", LegacyCurrentAnyActions, CurrentAnyActions);
+            changed |= ReplaceExactSectionText(anyChannel, "action_rules", LegacyActionsJson, CurrentAnyActions);
             changed |= ReplaceExactSectionText(anyChannel, "repetition_reinforcement", LegacyAnyReinforcement, CurrentAnyReinforcement);
             changed |= ReplaceExactSectionText(anyChannel, "output_specification", LegacyAnyOutput, CurrentAnyOutput);
             changed |= ReplaceExactSectionText(anyChannel, "output_specification", LegacyCurrentAnyOutput, CurrentAnyOutput);

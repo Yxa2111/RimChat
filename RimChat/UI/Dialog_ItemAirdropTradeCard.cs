@@ -74,10 +74,6 @@ namespace RimChat.UI
             base.PreOpen();
             ApplyPendingInventoryLoadIfReady();
             ApplyInitialPayload();
-            if (initialPayload == null)
-            {
-                ApplyCounterofferDefaults();
-            }
             EnsureOfferSelectionState();
             EnsureNeedBrowserData();
         }
@@ -117,29 +113,6 @@ namespace RimChat.UI
                 {
                     BindNeedRecord(ThingDefRecord.From(needDef));
                 }
-            }
-        }
-
-        private void ApplyCounterofferDefaults()
-        {
-            if (session?.lastAirdropCounterofferCount > 0)
-            {
-                requestedCountText = session.lastAirdropCounterofferCount.ToString(CultureInfo.InvariantCulture);
-            }
-
-            if (session?.lastAirdropCounterofferSilver > 0)
-            {
-                ForceSelectSilverAsOffer();
-                offerCountText = session.lastAirdropCounterofferSilver.ToString(CultureInfo.InvariantCulture);
-            }
-        }
-
-        private void ForceSelectSilverAsOffer()
-        {
-            InventoryDisplayEntry silver = FindInventoryEntryByDefName("Silver");
-            if (silver != null)
-            {
-                ApplyOfferSelection(silver);
             }
         }
 

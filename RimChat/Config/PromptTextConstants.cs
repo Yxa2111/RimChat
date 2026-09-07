@@ -36,18 +36,17 @@ namespace RimChat.Config
         public const string RequestRaidCallEveryoneActionDescription =
             "向所有相关敌对派系发出总攻号召，组织一次跨派系联合袭击。" +
             "这不是普通袭击的别名，而是更高一级的联合作战动作。" +
-            "玩家明确说出“call everyone”、“联合袭击”、“都叫来”、“全都叫来”、“everyone attack”或“all in”时，通常就是在主动要求发动这类总攻。" +
             "部队将在16-30小时内陆续到达；若敌对派系数量不占优势，将按好感度从低到高剔除友好/中立派系，直到敌对数量高于友好/中立数量。";
 
         public const string RequestRaidCallEveryoneActionRequirement =
-            "High-intensity joint assault action. Treat explicit player wording such as 'call everyone' or 'joint raid' as a direct request for a coordinated all-out attack, while still obeying global cooldown and runtime eligibility checks.";
+            "Use when the faction decides to organize a high-intensity coordinated assault. Obey the global cooldown and runtime faction checks.";
 
         public const string RequestRaidWavesActionDescription =
             "发动多波次持续袭击。参数 waves (int, 2-6) 指定波次数量，每波间隔12-20小时。" +
-            "它表示连续施压的多轮进攻，适合玩家主动要求持续挑战，或需要用多波次战斗替代联合总攻时使用。";
+            "它表示连续施压的多轮进攻。";
 
         public const string RequestRaidWavesActionRequirement =
-            "Faction cooldown: 5 days. Use when the player explicitly requests sustained pressure, or when multi-wave attacks are preferred over a coordinated all-out assault.";
+            "Faction cooldown is 5 days. Use when the faction decides that a sustained multi-wave attack is appropriate.";
 
         public const string RequestRaidWavesActionParameters =
             "waves (int, 2-6, 袭击波次数)";

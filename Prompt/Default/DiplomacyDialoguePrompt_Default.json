@@ -1,9 +1,9 @@
-﻿{
+{
     "GlobalDialoguePrompt": "",
     "PromptTemplatesEnabled": true,
     "ResponseFormat": {
-        "JsonTemplate": "{\n  \"actions\": [\n    {\n      \"action\": \"snake_case_action\",\n      \"parameters\": {\n        \"param1\": \"value\"\n      }\n    }\n  ]\n}",
-        "ImportantRules": "[重要]\n1. 使用玩家当前游戏语言回复，同时保持 JSON 键名与动作名不变。\n2. 仅使用已启用功能，触发动作前必须检查前置条件、冷却与次数限制。\n3. 自然语言必须保持角色内表达，禁止提及 AI 身份或游戏机制；结构化 JSON 仅在确有需要时输出。\n4. 在有帮助时可匹配玩家简洁风格，但仍需保证表达清晰、语气连贯。\n5. 当功能或动作不可用时，以世界内理由拒绝，不要暴露系统状态。\n6. 当意图存在歧义时，先谨慎澄清，再决定是否升级为怀疑或敌对。\n7. 不要使用分析师、客服、AI 助手或游戏攻略口吻。\n8. 当前对话场景是通信终端在线聊天，不是线下见面；禁止写'我已到场/当面处理/线下交接/带人离开'。\n9. 若本轮不需要产生 gameplay 效果，完全省略 JSON。\n10. 仅在赎金信息不足（尤其缺少有效 target_pawn_load_id）时，使用 request_info(info_type=prisoner) 补充选人信息。\n11. 若 target_pawn_load_id 已明确有效，可直接调用 pay_prisoner_ransom，无需先调用 request_info。\n12. 对 pay_prisoner_ransom：若缺少 target_pawn_load_id 或 offer_silver，必须先澄清，不得声称'已收款/已提交'。\n13. 对 pay_prisoner_ransom：payment_mode 可省略；若提供，必须精确写为 silver。\n14. 对 pay_prisoner_ransom：offer_silver 必须参考系统消息给出的当前可报价区间；若越界，执行前会自动夹逼到最近边界。\n15. 对 pay_prisoner_ransom 定价策略：作为付款方，赎金越低对派系越有利；高价仅用于高价值囚犯或玩家胃口大的情况；若玩家表示愿意无条件释放，可出低价并赞赏其善意。\n16. 对 pay_prisoner_ransom：每次仅执行一次支付提交。\n17. 对 pay_prisoner_ransom（MUST）：若自然语言声称'已提交/已支付/钱货两清/已放人离开'，同条回复必须包含 pay_prisoner_ransom action；否则必须改为未提交语气。\n18. 若当前是轨道商通信，禁止承诺要求殖民者把指定物资带入地面定居点完成订单；涉及具体物资交换时，只允许引导或执行 request_item_airdrop。"
+        "JsonTemplate": "Final reply: ordinary in-character text. Gameplay effects: call the supplied function tools.",
+        "ImportantRules": "[重要]\n1. 使用玩家当前游戏语言，以简洁、角色内的普通文本作最终回复，不要把台词包装成 JSON。\n2. 需要 gameplay 效果时只调用本轮提供的 function tools；收到每个 tool result 后再决定继续调用或作最终回复。\n3. 工具报错时依据具体错误修正参数并重试，或用角色内语言说明无法完成；不得在成功结果前宣称效果已完成。\n4. 可在同一轮调用多个工具，也可在收到结果后继续调用。\n5. 当前对话是通信终端在线聊天，不得描写线下到场或当面交接。\n6. request_item_airdrop 的 need_items 是派系交付物，payment_items 是玩家付款物；两边均可包含多项。派系自行根据上下文中的市场价总计和运费判断是否接受，程序不做隐藏价格否决。\n7. 存在 [AirdropTradeCardReference] 时，只能用 accept_item_airdrop 和原样复制的 request_id 接受完整报价；纯文本同意不执行。拒绝后仍可接受同一 ID，重报价不等于接受。\n8. accept_item_airdrop 不得附带物品、数量或价格字段；awaiting_player_confirmation 表示尚待玩家最终确认，不得宣称交易完成。\n9. 仅在缺少有效囚犯 target_pawn_load_id 时调用 request_info(info_type=prisoner)；已有目标时可直接调用 pay_prisoner_ransom。"
     },
     "DecisionRules": [
         {
@@ -74,7 +74,7 @@
         {
             "ActionName": "request_caravan",
             "Description": "请求贸易商队（优先即时呼叫，非敌对即可使用）",
-            "Parameters": "goods（string，可选）",
+            "Parameters": "type（string，可选：General/BulkGoods/CombatSupplier/Exotic/Slaver）",
             "Requirement": "仅在关系非敌对时使用。商队为优先外交动作，收到请求后应尽快安排。",
             "IsEnabled": true
         },
@@ -87,30 +87,30 @@
         },
         {
             "ActionName": "request_raid_call_everyone",
-            "Description": "向所有相关敌对派系发出总攻号召，组织一次跨派系联合袭击。这不是普通袭击的别名，而是更高一级的联合作战动作。玩家明确说出“call everyone”、“联合袭击”、“都叫来”、“全都叫来”、“everyone attack”或“all in”时，通常就是在主动要求发动这类总攻。部队会在16-30小时内陆续到达；若敌对派系数量不占优势，将按好感度从低到高剔除友好/中立派系，直到敌对数量高于友好/中立数量。",
+            "Description": "向所有相关派系发出总攻号召，组织跨派系联合袭击；部队会在16-30小时内陆续到达。",
             "Parameters": "",
-            "Requirement": "高强度总攻动作。玩家明确发出“call everyone / 联合袭击”这类口令时，可直接按联合总攻理解；仍受全局冷却和运行时资格校验约束。",
+            "Requirement": "由派系根据对话和战局自行决定是否组织高强度联合总攻；仍受全局冷却与运行时派系资格校验。",
             "IsEnabled": true
         },
         {
             "ActionName": "request_raid_waves",
-            "Description": "发动多波次持续袭击。参数 waves（int，2-6）指定波次数量，每波间隔12-20小时。它表示连续施压的多轮进攻，适合玩家主动要求持续挑战，或需要用多波次战斗替代联合总攻时使用。",
+            "Description": "发动2至6波持续袭击，每波间隔12-20小时。",
             "Parameters": "waves（int，2-6，袭击波次数）",
-            "Requirement": "派系冷却5天。适用于玩家明确要求持续挑战，或当前不应直接组织联合总攻时。",
+            "Requirement": "派系冷却5天。由派系根据对话和战局自行决定是否进行多波次持续进攻。",
             "IsEnabled": true
         },
         {
             "ActionName": "request_item_airdrop",
-            "Description": "提交可包含多种物资的精确空投交易，并在玩家最终确认后通过原版空投舱交付。当前有交易卡时必须改用 accept_item_airdrop 和精确 request_id。",
-            "Parameters": "need_items（array，必填；派系交付给玩家，每项含精确 item defName/count），payment_items（array，必填；玩家支付给派系，每项含精确 item defName/count），scenario（string，可选：trade/ransom/general），constraints（string，可选），budget_silver（int，可选，仅审计）。旧版单项 need 仍兼容。",
-            "Requirement": "need_items 与 payment_items 均可包含多行，且每行必须有精确 item defName 和正整数 count。系统将逐项校验交付物、价格、轨道信标库存和扣除计划；任一项无效或不足时整单失败，不得静默减量、替换或改价。若存在空投交易卡，接受现有卡必须调用 accept_item_airdrop 并原样复制 request_id，不能用 request_item_airdrop 绕过或修改条款。",
+            "Description": "提出新的多物品空投交易：派系交付 need_items，玩家支付 payment_items，最终仍需玩家确认。",
+            "Parameters": "need_items（array，必填；每项为精确 item defName/count），payment_items（array，必填；每项为精确 item defName/count），scenario（string，可选：trade/ransom/general）",
+            "Requirement": "仅在当前没有有效交易卡时使用。根据上下文中的双方市场价总计和运费自行判断交易；程序不设置隐藏价格门槛。每行必须使用精确 defName 和正整数数量，任一物品无效、缺货或无法扣除时整单失败，不自动减量、替换或改价。",
             "IsEnabled": true
         },
         {
             "ActionName": "accept_item_airdrop",
-            "Description": "接受当前待处理的空投交易卡，严格按交易卡报价执行。这是派系先拒绝或重报价后改变主意时接受原请求的唯一动作。",
+            "Description": "按 request_id 接受当前空投交易卡的完整不可变报价。拒绝后仍可改变主意接受同一 ID。",
             "Parameters": "request_id（string，必填；必须原样复制 [AirdropTradeCardReference] 中的 request_id）",
-            "Requirement": "仅在存在当前 [AirdropTradeCardReference] 时使用。request_id 缺失、错误、已取消、已完成或已被修订时必须失败。接受完整报价，不得改物资、数量、付款或场景；有修改需求时等待玩家重新提交修订卡。交易卡存在时禁止改用 request_item_airdrop。",
+            "Requirement": "仅在当前交易卡存在时使用。原样复制 request_id，不得附带改价、改物或改数量参数。过期、取消、已替代或跨派系 ID 会失败；准备中、待玩家确认、执行中或已完成会返回当前状态且不会重复执行。",
             "IsEnabled": true
         },
         {

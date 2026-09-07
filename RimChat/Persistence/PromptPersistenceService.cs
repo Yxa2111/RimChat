@@ -6063,14 +6063,24 @@ namespace RimChat.Persistence
         private void AppendCompactDiplomacyResponseContract(StringBuilder sb, SystemPromptConfig config, Faction faction)
         {
             List<ApiActionConfig> availableActions = GetAvailableActionsForFaction(config, faction);
-            AppendOutputSpecificationAuthoritySection(sb, config);
-            AppendDiplomacyResponseFormatSection(sb, config);
-            AppendDiplomacyCriticalActionRules(sb);
-            AppendCompactActionCatalog(sb, availableActions);
+            AppendNativeDiplomacyToolProtocol(sb);
             AppendBlockedActionHints(sb, config, faction);
             AppendGoodwillPeacePolicyHints(sb, faction);
             AppendPresenceActionGuidance(sb, availableActions);
-            sb.AppendLine(PromptTextConstants.NoActionResponseHint);
+        }
+
+        private static void AppendNativeDiplomacyToolProtocol(StringBuilder sb)
+        {
+            sb.AppendLine("[NativeToolProtocol]");
+            sb.AppendLine("Reply with concise, in-character dialogue in the player's current game language. Return ordinary text for the final reply; do not wrap it in JSON and do not emit an actions JSON block.");
+            sb.AppendLine("Gameplay effects are available only through the supplied function tools. Call a tool when you decide to perform its effect, then read the matching tool result before deciding what to say or whether another tool call is needed.");
+            sb.AppendLine("You may call multiple tools and may continue calling tools after receiving results. If a result reports invalid arguments or a runtime failure, correct the call and retry when appropriate, or explain the failure in character.");
+            sb.AppendLine("Do not claim that an effect succeeded before its tool result says so. A result with awaiting_player_confirmation means the request is prepared but the transaction is not complete.");
+            sb.AppendLine("For a pending [AirdropTradeCardReference], accept the complete immutable quote only by calling accept_item_airdrop with the exact request_id. A text-only acceptance has no gameplay effect. A refusal does not invalidate the request, so you may accept that same id later.");
+            sb.AppendLine("Never add price, item, quantity, or payment fields to accept_item_airdrop. To change terms, wait for the player to submit a revised card with a new request_id. Do not use request_item_airdrop while a current card exists.");
+            sb.AppendLine("For a new request_item_airdrop, need_items are delivered by your faction and payment_items are paid by the player. Preserve every row and positive integer count. Use the market totals and shipping values supplied in context to judge the deal yourself; runtime only enforces availability, exact terms, inventory, and safe execution.");
+            sb.AppendLine("Use request_info(info_type=prisoner) only when a ransom target id is missing. When the target is known, call pay_prisoner_ransom directly and rely on its tool result.");
+            sb.AppendLine();
         }
 
         private void AppendDiplomacyResponseFormatSection(StringBuilder sb, SystemPromptConfig config)
@@ -6566,13 +6576,7 @@ namespace RimChat.Persistence
                 return true;
             }
 
-            if (eligibility.Allowed)
-            {
-                return true;
-            }
-
-            return string.Equals(actionName, "request_raid_call_everyone", StringComparison.Ordinal) &&
-                   string.Equals(eligibility.Code, "call_everyone_requires_post_raid_escalation", StringComparison.Ordinal);
+            return eligibility.Allowed;
         }
 
         private static bool IsPromptActionAllowedInCurrentBuild(string actionName)
@@ -6599,15 +6603,13 @@ namespace RimChat.Persistence
                     ProjectedGoodwillReason = GetProjectedGoodwillBlockReason(faction, a.ActionName),
                     Eligibility = eligibility.ContainsKey(a.ActionName) ? eligibility[a.ActionName] : null
                 })
-                .Where(item => !ShouldHideBlockedActionHint(item.ActionName, item.Eligibility))
                 .Where(item => !string.IsNullOrWhiteSpace(item.ProjectedGoodwillReason) || (item.Eligibility != null && !item.Eligibility.Allowed))
                 .ToList();
 
             if (!blocked.Any()) return;
 
             sb.AppendLine("=== TEMPORARILY UNAVAILABLE ACTIONS ===");
-            sb.AppendLine("Informational only — do NOT avoid ALL actions because some are unavailable.");
-            sb.AppendLine("You MUST still use the AVAILABLE actions listed above when the player's intent is actionable.");
+            sb.AppendLine("These entries explain current runtime restrictions. Function tools supplied with the request are the actions available now.");
             sb.AppendLine();
             foreach (var item in blocked)
             {
@@ -6626,24 +6628,6 @@ namespace RimChat.Persistence
                 }
             }
             sb.AppendLine();
-        }
-
-        private static bool ShouldHideBlockedActionHint(string actionName, ActionValidationResult eligibility)
-        {
-            if (!string.Equals(actionName, "request_raid_call_everyone", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            if (eligibility == null || eligibility.Allowed)
-            {
-                return false;
-            }
-
-            return string.Equals(
-                eligibility.Code,
-                "call_everyone_requires_post_raid_escalation",
-                StringComparison.Ordinal);
         }
 
         private static void AppendGoodwillPeacePolicyHints(StringBuilder sb, Faction faction)

@@ -37,8 +37,6 @@ namespace RimChat.UI
                 return;
             }
 
-            bool clearedPendingIntent = currentSession.ClearPendingAirdropSelectionIntentState();
-            bool clearedAirdropIntent = ClearAirdropDelayedIntentRuntime(currentSession);
             bool hadAsyncState =
                 currentSession.isWaitingForAirdropSelection ||
                 !string.IsNullOrWhiteSpace(currentSession.pendingAirdropRequestId) ||
@@ -59,11 +57,11 @@ namespace RimChat.UI
                 currentSession.airdropPreparedAwaitingConfirmTick = 0;
             }
 
-            if (clearedPendingIntent || clearedAirdropIntent || hadAsyncState || clearTradeCardReference || resetStageToIdle)
+            if (hadAsyncState || clearTradeCardReference || resetStageToIdle)
             {
                 currentSession.airdropRequestGeneration++;
                 Log.Message(
-                    $"[RimChat] AirdropPendingIntentInvalidated: reason={reason ?? "none"},clearedPendingIntent={clearedPendingIntent},clearedAirdropIntent={clearedAirdropIntent},clearedAsyncState={hadAsyncState},clearedTradeCard={clearTradeCardReference},resetStageToIdle={resetStageToIdle},generation={currentSession.airdropRequestGeneration}");
+                    $"[RimChat] AirdropRuntimeReset: reason={reason ?? "none"},clearedAsyncState={hadAsyncState},clearedTradeCard={clearTradeCardReference},resetStageToIdle={resetStageToIdle},generation={currentSession.airdropRequestGeneration}");
             }
         }
 
@@ -77,23 +75,57 @@ namespace RimChat.UI
                 return false;
             }
 
-            bool hasPendingIntent = currentSession.HasPendingAirdropSelectionIntent();
             bool hasAsyncState =
                 currentSession.isWaitingForAirdropSelection ||
                 !string.IsNullOrWhiteSpace(currentSession.pendingAirdropRequestId) ||
                 currentSession.pendingAirdropRequestLease != null;
-            if (!hasPendingIntent && !hasAsyncState)
+            if (!hasAsyncState)
             {
                 return false;
             }
 
             details =
-                $"stage={currentSession.airdropExecutionStage},hasPendingIntent={hasPendingIntent},isWaitingForSelection={currentSession.isWaitingForAirdropSelection}," +
+                $"stage={currentSession.airdropExecutionStage},isWaitingForSelection={currentSession.isWaitingForAirdropSelection}," +
                 $"requestId={currentSession.pendingAirdropRequestId ?? "none"},hasLease={(currentSession.pendingAirdropRequestLease != null)}";
             return true;
         }
 
         private const int AirdropPreparedAwaitingConfirmTimeoutTicks = 5000; // 2 game hours
+
+        private static bool ReturnUncommittedAirdropTradeCardToPending(
+            FactionDialogueSession currentSession,
+            string reason)
+        {
+            if (currentSession == null)
+            {
+                return false;
+            }
+
+            bool hasRecoverableCard = currentSession.hasPendingAirdropTradeCardReference &&
+                (currentSession.pendingAirdropTradeCardStatus == AirdropTradeCardStatus.Preparing ||
+                 currentSession.pendingAirdropTradeCardStatus == AirdropTradeCardStatus.AwaitingPlayerConfirm);
+            bool hasUncommittedRuntime = currentSession.airdropExecutionStage == AirdropExecutionStage.SelectingCandidate ||
+                currentSession.airdropExecutionStage == AirdropExecutionStage.PreparedAwaitingConfirm;
+            if (!hasRecoverableCard && !hasUncommittedRuntime)
+            {
+                return false;
+            }
+
+            if (hasRecoverableCard && !string.IsNullOrWhiteSpace(currentSession.pendingAirdropTradeCardRequestId))
+            {
+                currentSession.SetAirdropTradeCardStatus(
+                    currentSession.pendingAirdropTradeCardRequestId,
+                    AirdropTradeCardStatus.Pending);
+            }
+
+            ResetAirdropConfirmationRuntime(
+                currentSession,
+                reason,
+                disposeLease: true,
+                clearTradeCardReference: false,
+                resetStageToIdle: true);
+            return true;
+        }
 
         private void TryAutoCleanupStaleAirdropConfirmation(FactionDialogueSession session, Faction faction)
         {
@@ -105,9 +137,8 @@ namespace RimChat.UI
             int elapsed = currentTick - session.airdropPreparedAwaitingConfirmTick;
             if (elapsed < AirdropPreparedAwaitingConfirmTimeoutTicks) return;
 
-            Log.Warning($"[RimChat] Airdrop auto-cleanup: PreparedAwaitingConfirm stale for {elapsed} ticks (> {AirdropPreparedAwaitingConfirmTimeoutTicks}). Resetting for faction={faction.Name}.");
-            ResetAirdropConfirmationRuntime(session, "auto_cleanup_stale_confirmation", true, true, true);
-            session.AddMessage("System", "RimChat_ItemAirdropCancelledSystem".Translate().ToString(), false, DialogueMessageType.System);
+            Log.Warning($"[RimChat] Airdrop auto-cleanup: PreparedAwaitingConfirm stale for {elapsed} ticks (> {AirdropPreparedAwaitingConfirmTimeoutTicks}). Returning the quote to Pending for faction={faction.Name}.");
+            ReturnUncommittedAirdropTradeCardToPending(session, "auto_cleanup_stale_confirmation");
             ClearPendingAirdropDialogState("auto_cleanup", true);
             SaveFactionMemory(session, faction);
         }

@@ -75,8 +75,6 @@ namespace RimChat.DiplomacySystem
                 faction, map.wealthWatcher?.WealthItems ?? 0f, GetAirdropFactionTradeTotal(faction));
             int shipping = podCount * rule.ShippingCostPerPod;
             int required = needTotal + shipping;
-            if (paymentTotal < required)
-                return FailFastAirdrop("payment_value_insufficient", $"Quoted payment value {paymentTotal} is below delivery plus shipping value {required}.", faction, parameters, sendLetter: false);
 
             ItemAirdropTradeLine firstNeed = needs[0];
             ItemAirdropPreparedPaymentLine firstPayment = paymentLines.FirstOrDefault();

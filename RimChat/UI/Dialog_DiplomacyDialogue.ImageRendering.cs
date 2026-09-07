@@ -534,7 +534,7 @@ namespace RimChat.UI
         {
             float contentWidth = Mathf.Max(1f, width - AirdropCardPadding * 2f);
             float headerTotal = AirdropCardHeaderHeight + 4f;
-            string title = "RimChat_AirdropTradeCard_BubbleTitle".Translate().ToString();
+            string title = BuildAirdropTradeCardTitle(msg);
             float titleHeight = Mathf.Max(AirdropCardTitleBandHeight, Text.CalcHeight(title, contentWidth));
             float titleTotal = titleHeight + 4f;
             float flowRowHeight = AirdropCardMiniCardHeight + 6f;
@@ -580,7 +580,7 @@ namespace RimChat.UI
 
             Text.Font = GameFont.Small;
             GUI.color = new Color(0.09f, 0.11f, 0.10f, 1f);
-            string title = "RimChat_AirdropTradeCard_BubbleTitle".Translate().ToString();
+            string title = BuildAirdropTradeCardTitle(msg);
             float titleHeight = Mathf.Max(AirdropCardTitleBandHeight, Text.CalcHeight(title, contentWidth));
             bool editable = IsEditableAirdropTradeCard(msg);
             float actionButtonWidth = editable ? 58f : 0f;
@@ -663,6 +663,23 @@ namespace RimChat.UI
 
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
+        }
+
+        private string BuildAirdropTradeCardTitle(DialogueMessageData msg)
+        {
+            string title = "RimChat_AirdropTradeCard_BubbleTitle".Translate().ToString();
+            string requestId = msg?.airdropRequestId?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(requestId))
+            {
+                return title;
+            }
+
+            string statusKey = "RimChat_AirdropTradeCard_Status_History";
+            if (session?.TryGetAirdropTradeCardStatus(requestId, out AirdropTradeCardStatus status) == true)
+            {
+                statusKey = "RimChat_AirdropTradeCard_Status_" + status;
+            }
+            return title + " · " + statusKey.Translate();
         }
 
         private static string BuildAirdropBubbleShippingText(DialogueMessageData msg)

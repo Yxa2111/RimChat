@@ -23,8 +23,10 @@ namespace RimChat.UI
             AIAction action,
             FactionDialogueSession currentSession,
             Faction currentFaction,
-            ref bool imageQueuedThisTurn)
+            ref bool imageQueuedThisTurn,
+            out ActionExecutionOutcome outcome)
         {
+            outcome = null;
             if (action == null || !string.Equals(action.ActionType, AIActionNames.SendImage, StringComparison.Ordinal))
             {
                 return false;
@@ -32,19 +34,22 @@ namespace RimChat.UI
 
             if (ImageGenerationAvailability.IsBlocked())
             {
-                currentSession?.AddMessage("System", ImageGenerationAvailability.GetBlockedMessage(), false, DialogueMessageType.System);
+                string message = ImageGenerationAvailability.GetBlockedMessage();
+                outcome = ActionExecutionOutcome.Failure(action, message);
                 return true;
             }
 
             if (imageQueuedThisTurn)
             {
-                currentSession?.AddMessage("System", "RimChat_SendImageOnlyOnePerTurn".Translate(), false, DialogueMessageType.System);
+                string message = "RimChat_SendImageOnlyOnePerTurn".Translate().ToString();
+                outcome = ActionExecutionOutcome.Failure(action, message);
                 return true;
             }
 
             imageQueuedThisTurn = true;
             if (currentSession == null || currentFaction == null)
             {
+                outcome = ActionExecutionOutcome.Failure(action, "Image request requires a live faction dialogue session.");
                 return true;
             }
 
@@ -52,7 +57,8 @@ namespace RimChat.UI
             DiplomacyImageApiConfig imageConfig = settings?.DiplomacyImageApi;
             if (imageConfig == null || !imageConfig.IsConfigured())
             {
-                currentSession.AddMessage("System", "RimChat_SendImageConfigInvalid".Translate(), false, DialogueMessageType.System);
+                string message = "RimChat_SendImageConfigInvalid".Translate().ToString();
+                outcome = ActionExecutionOutcome.Failure(action, message);
                 return true;
             }
 
@@ -69,7 +75,8 @@ namespace RimChat.UI
                 string failedId = string.IsNullOrWhiteSpace(requestedTemplateId)
                     ? RimTalkPromptEntryChannelCatalog.ImageGeneration
                     : requestedTemplateId;
-                currentSession.AddMessage("System", "RimChat_SendImageTemplateMissing".Translate(failedId), false, DialogueMessageType.System);
+                string message = "RimChat_SendImageTemplateMissing".Translate(failedId).ToString();
+                outcome = ActionExecutionOutcome.Failure(action, message);
                 return true;
             }
 
@@ -177,6 +184,7 @@ namespace RimChat.UI
                 SaveFactionMemory(currentSession, currentFaction);
             });
 
+            outcome = ActionExecutionOutcome.Success(action, "Image generation request queued.");
             return true;
         }
 

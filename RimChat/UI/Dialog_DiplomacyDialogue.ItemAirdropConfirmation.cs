@@ -18,14 +18,6 @@ namespace RimChat.UI
     /// </summary>
     public partial class Dialog_DiplomacyDialogue
     {
-        private const string AirdropPendingCandidatesKey = "__airdrop_pending_candidates";
-        private const string AirdropPendingFailureCodeKey = "__airdrop_pending_failure_code";
-        private enum AirdropPendingResolution
-        {
-            AutoPickTop1 = 0,
-            ShowFailureMessage = 1
-        }
-
         private static bool IsRequestItemAirdropAction(AIAction action)
         {
             return action != null &&
@@ -64,8 +56,6 @@ namespace RimChat.UI
                 outcome = ActionExecutionOutcome.Failure(action, acceptanceFailure);
                 return true;
             }
-            TryInjectPendingAirdropCountFromLatestPlayerMessage(actionSnapshot, currentSession);
-
             DialogueRuntimeContext requestContext = runtimeContext.WithCurrentRuntimeMarkers();
             string validateReason = string.Empty;
             bool resolved = DialogueContextResolver.TryResolveLiveContext(
@@ -128,14 +118,8 @@ namespace RimChat.UI
             if (prepareResult.Data is ItemAirdropPendingSelectionData pendingSelection)
             {
                 lease.Dispose();
-                TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.SelectingCandidate, pendingSelection.FailureCode ?? "selection_pending");
-                if (DeterminePendingSelectionResolution(pendingSelection) == AirdropPendingResolution.AutoPickTop1 &&
-                    TryAutoPickPendingAirdropSelection(actionSnapshot, pendingSelection, currentSession, currentFaction, out outcome))
-                {
-                    return true;
-                }
-
-                CacheAirdropPendingSelectionIntent(currentSession, actionSnapshot, pendingSelection);
+                MarkAirdropTradeCardFailed(actionSnapshot, currentSession);
+                TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Failed, pendingSelection.FailureCode ?? "selection_pending");
                 outcome = ActionExecutionOutcome.Failure(
                     action,
                     BuildAirdropPendingSelectionSystemText(pendingSelection));
@@ -167,16 +151,11 @@ namespace RimChat.UI
             MarkAirdropTradeCardAwaitingConfirm(actionSnapshot, currentSession);
             TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.PreparedAwaitingConfirm, preparedTrade.SelectedDefName ?? "prepared_trade");
             currentSession.airdropPreparedAwaitingConfirmTick = Find.TickManager?.TicksGame ?? 0;
-            List<PendingAirdropSelectionCandidate> pendingCandidates = null;
             Dictionary<string, object> baseParameters = CloneParameters(actionSnapshot.Parameters);
-            if (!TryReadPendingAirdropCandidates(baseParameters, out pendingCandidates))
-            {
-                pendingCandidates = new List<PendingAirdropSelectionCandidate>();
-            }
 
             Log.Message(
-                $"[RimChat] AirdropConfirmOpen: def={preparedTrade.SelectedDefName},count={preparedTrade.Quantity},requested={preparedTrade.RequestedQuantity},hardMax={preparedTrade.HardMax},adjustment={preparedTrade.CountAdjustmentReason},payment={preparedTrade.PaymentTotalSilver},candidateCount={pendingCandidates.Count}");
-            ShowAirdropTradeConfirmationDialog(currentSession, currentFaction, preparedTrade, baseParameters, pendingCandidates);
+                $"[RimChat] AirdropConfirmOpen: def={preparedTrade.SelectedDefName},count={preparedTrade.Quantity},requested={preparedTrade.RequestedQuantity},hardMax={preparedTrade.HardMax},adjustment={preparedTrade.CountAdjustmentReason},payment={preparedTrade.PaymentTotalSilver}");
+            ShowAirdropTradeConfirmationDialog(currentSession, currentFaction, preparedTrade, baseParameters);
             outcome = ActionExecutionOutcome.Success(
                 action,
                 "RimChat_ItemAirdropAwaitingConfirmSystem".Translate().ToString(),
@@ -187,185 +166,6 @@ namespace RimChat.UI
         private static string BuildAirdropSelectionInProgressSystemText()
         {
             return "RimChat_ItemAirdropSelectionInProgressSystem".Translate().ToString();
-        }
-
-        private static void TryInjectPendingAirdropCountFromLatestPlayerMessage(AIAction actionSnapshot, FactionDialogueSession currentSession)
-        {
-            if (actionSnapshot == null)
-            {
-                return;
-            }
-
-            if (actionSnapshot.Parameters == null)
-            {
-                actionSnapshot.Parameters = new Dictionary<string, object>(StringComparer.Ordinal);
-            }
-
-            if (HasAirdropExplicitCountParameter(actionSnapshot.Parameters))
-            {
-                return;
-            }
-
-            int pendingCardCount = Math.Max(0, currentSession?.pendingAirdropTradeCardRequestedCount ?? 0);
-            if (pendingCardCount > 0)
-            {
-                actionSnapshot.Parameters["count"] = pendingCardCount;
-                Log.Message($"[RimChat] Injected pending airdrop count from session trade-card reference: count={pendingCardCount}");
-                return;
-            }
-
-            string latestPlayerText = currentSession?.messages?
-                .LastOrDefault(message => message != null && message.isPlayer && !message.IsSystemMessage())?
-                .message ?? string.Empty;
-            if (!TryExtractAirdropRequestedCount(latestPlayerText, out int requestedCount))
-            {
-                return;
-            }
-
-            actionSnapshot.Parameters["count"] = requestedCount;
-            Log.Message($"[RimChat] Injected pending airdrop count from latest player message: count={requestedCount}");
-        }
-
-        private static bool HasAirdropExplicitCountParameter(Dictionary<string, object> parameters)
-        {
-            if (parameters == null)
-            {
-                return false;
-            }
-
-            return parameters.ContainsKey("count") || parameters.ContainsKey("quantity");
-        }
-
-        private static bool IsTimeoutPendingSelection(ItemAirdropPendingSelectionData pendingSelection)
-        {
-            string code = pendingSelection?.FailureCode ?? string.Empty;
-            return code.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static bool IsManualChoicePending(ItemAirdropPendingSelectionData pendingSelection)
-        {
-            string code = pendingSelection?.FailureCode ?? string.Empty;
-            return code.IndexOf("selection_manual_choice", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static AirdropPendingResolution DeterminePendingSelectionResolution(ItemAirdropPendingSelectionData pendingSelection)
-        {
-            if (IsTimeoutPendingSelection(pendingSelection) || IsManualChoicePending(pendingSelection))
-            {
-                return AirdropPendingResolution.AutoPickTop1;
-            }
-
-            return AirdropPendingResolution.ShowFailureMessage;
-        }
-
-        private bool TryAutoPickPendingAirdropSelection(
-            AIAction action,
-            ItemAirdropPendingSelectionData pendingSelection,
-            FactionDialogueSession currentSession,
-            Faction currentFaction,
-            out ActionExecutionOutcome outcome)
-        {
-            outcome = null;
-            if (pendingSelection?.Options == null || pendingSelection.Options.Count == 0)
-            {
-                return false;
-            }
-
-            Dictionary<string, object> autoParameters = CloneParameters(action?.Parameters);
-            autoParameters[AirdropPendingFailureCodeKey] = pendingSelection.FailureCode ?? "selection_manual_choice";
-            autoParameters[AirdropPendingCandidatesKey] = pendingSelection.Options
-                .OrderBy(option => option.Index)
-                .Take(5)
-                .Select(option => new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["index"] = option.Index,
-                    ["defName"] = option.DefName ?? string.Empty,
-                    ["label"] = option.Label ?? option.DefName ?? string.Empty,
-                    ["unitPrice"] = option.UnitPrice,
-                    ["max_legal_count"] = option.MaxLegalCount
-                })
-                .Cast<object>()
-                .ToList();
-
-            ItemAirdropPendingSelectionOption topOption = pendingSelection.Options
-                .OrderBy(option => option.Index)
-                .FirstOrDefault();
-            if (topOption == null || string.IsNullOrWhiteSpace(topOption.DefName))
-            {
-                return false;
-            }
-
-            autoParameters["selected_def"] = topOption.DefName;
-            var autoAction = new AIAction
-            {
-                ActionType = AIActionNames.RequestItemAirdrop,
-                Parameters = autoParameters,
-                Reason = "selection_timeout_autopick_top1"
-            };
-            return TryHandleAirdropActionWithConfirmation(autoAction, currentSession, currentFaction, out outcome);
-        }
-
-        private static void CacheAirdropPendingSelectionIntent(
-            FactionDialogueSession currentSession,
-            AIAction action,
-            ItemAirdropPendingSelectionData pendingSelection)
-        {
-            if (currentSession == null || action == null || pendingSelection?.Options == null || pendingSelection.Options.Count == 0)
-            {
-                return;
-            }
-
-            Dictionary<string, object> parameters = CloneParameters(action.Parameters);
-            parameters.Remove("selected_def");
-            parameters[AirdropPendingFailureCodeKey] = pendingSelection.FailureCode ?? "selection_timeout";
-            parameters[AirdropPendingCandidatesKey] = pendingSelection.Options
-                .Select(option => new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["index"] = option.Index,
-                    ["defName"] = option.DefName ?? string.Empty,
-                    ["label"] = option.Label ?? option.DefName ?? string.Empty,
-                    ["unitPrice"] = option.UnitPrice,
-                    ["max_legal_count"] = option.MaxLegalCount
-                })
-                .Cast<object>()
-                .ToList();
-
-            var pendingAction = new AIAction
-            {
-                ActionType = AIActionNames.RequestItemAirdrop,
-                Parameters = parameters,
-                Reason = "selection_timeout_pending_confirmation"
-            };
-
-            int assistantRound = GetAssistantDialogueRound(currentSession) + 1;
-            PendingDelayedActionIntent intent = CreatePendingDelayedIntent(
-                pendingAction,
-                assistantRound,
-                true,
-                "selected_def");
-            if (intent == null)
-            {
-                return;
-            }
-
-            currentSession.pendingDelayedActionIntent = intent;
-            currentSession.lastDelayedActionIntent = intent.Clone();
-            Log.Message($"[RimChat] CacheAirdropPendingSelectionIntent: cached pendingDelayedActionIntent for RequestItemAirdrop, failureCode={pendingSelection.FailureCode}, optionsCount={pendingSelection.Options.Count}");
-        }
-
-        private static string BuildPendingSelectionCandidateLine(PendingAirdropSelectionCandidate candidate)
-        {
-            if (candidate == null)
-            {
-                return string.Empty;
-            }
-
-            return "RimChat_ItemAirdropSelectionPendingLine".Translate(
-                candidate.Index,
-                candidate.Label ?? candidate.DefName ?? "RimChat_Unknown".Translate().ToString(),
-                candidate.DefName ?? "RimChat_Unknown".Translate().ToString(),
-                candidate.UnitPrice.ToString("F1", CultureInfo.InvariantCulture),
-                Math.Max(0, candidate.MaxLegalCount)).ToString();
         }
 
         private static string BuildAirdropPendingSelectionSystemText(ItemAirdropPendingSelectionData pendingSelection)
@@ -397,24 +197,18 @@ namespace RimChat.UI
             FactionDialogueSession currentSession,
             Faction currentFaction,
             ItemAirdropPreparedTradeData preparedTrade,
-            Dictionary<string, object> baseParameters,
-            List<PendingAirdropSelectionCandidate> pendingCandidates)
+            Dictionary<string, object> baseParameters)
         {
-            List<PendingAirdropSelectionCandidate> availableCandidates = pendingCandidates?
-                .OrderBy(candidate => candidate.Index)
-                .Take(5)
-                .ToList() ?? new List<PendingAirdropSelectionCandidate>();
             ClearPendingAirdropDialogState("reschedule_confirmation", false);
             pendingAirdropDialogState = new PendingAirdropDialogState
             {
                 Session = currentSession,
                 Faction = currentFaction,
                 PreparedTrade = preparedTrade,
-                BaseParameters = CloneParameters(baseParameters),
-                PendingCandidates = ClonePendingAirdropCandidates(availableCandidates)
+                BaseParameters = CloneParameters(baseParameters)
             };
             Log.Message(
-                $"[RimChat] AirdropConfirmScheduled: def={preparedTrade?.SelectedDefName ?? "unknown"},count={preparedTrade?.Quantity ?? 0},candidateCount={availableCandidates.Count}");
+                $"[RimChat] AirdropConfirmScheduled: def={preparedTrade?.SelectedDefName ?? "unknown"},count={preparedTrade?.Quantity ?? 0}");
         }
 
         private void OpenQueuedAirdropTradeConfirmationDialog(PendingAirdropDialogState state)
@@ -443,15 +237,12 @@ namespace RimChat.UI
             int shippingPods = Math.Max(0, trade?.ShippingPodCount ?? 0);
             string adjustmentReason = trade?.CountAdjustmentReason ?? string.Empty;
 
-            List<PendingAirdropSelectionCandidate> availableCandidates = state.PendingCandidates?
-                .OrderBy(candidate => candidate.Index)
-                .Take(5)
-                .ToList() ?? new List<PendingAirdropSelectionCandidate>();
-            // A request-id acceptance is an immutable quote. Keep the
-            // alternative-item path for legacy direct requests, while a card
-            // acceptance can only confirm or cancel/revise the card.
             bool isTradeCardAcceptance = !string.IsNullOrWhiteSpace(GetAirdropTradeCardRequestId(state.BaseParameters));
-            bool hasManualAlternative = !isTradeCardAcceptance && availableCandidates.Count > 1;
+            bool hasManualAlternative = isTradeCardAcceptance;
+            string alternativeLabel = "RimChat_AirdropTradeCard_EditRequest".Translate().ToString();
+            string cancelLabel = isTradeCardAcceptance
+                ? "RimChat_AirdropTradeCard_CancelRequest".Translate().ToString()
+                : "RimChat_ItemAirdropConfirmCancel".Translate().ToString();
 
             var confirmationDialog = new Dialog_AirdropTradeConfirmWithAlternative(
                 tradeLabel,
@@ -465,31 +256,28 @@ namespace RimChat.UI
                 adjustmentReason,
                 basketDetails,
                 hasManualAlternative,
+                alternativeLabel,
+                cancelLabel,
                 () => CommitConfirmedAirdropTrade(state.Session, state.Faction, state.PreparedTrade),
+                () => CancelConfirmedAirdropTrade(state.Session, state.Faction),
                 () =>
                 {
-                    // Pre-fill trade card from current prepared trade parameters.
-                    ItemAirdropPreparedTradeData trade = state.PreparedTrade;
-                    if (trade != null && state.Session != null &&
-                        !string.IsNullOrWhiteSpace(trade.SelectedDefName) && trade.Quantity > 0)
+                    if (!isTradeCardAcceptance)
                     {
-                        state.Session.CacheAirdropCounteroffer(
-                            trade.SelectedDefName,
-                            trade.Quantity,
-                            trade.PaymentTotalSilver,
-                            string.Empty);
+                        return;
                     }
 
-                    CancelConfirmedAirdropTrade(state.Session, state.Faction, skipSystemMessage: true);
-                    if (state.Session != null && state.Faction != null)
+                    ItemAirdropTradeCardPayload revision = BuildPendingAirdropTradeCardEditorPayload();
+                    ReturnConfirmedAirdropTradeToNegotiation(state.Session, state.Faction);
+                    if (state.Session != null && state.Faction != null && revision != null)
                     {
                         Find.WindowStack.Add(new Dialog_ItemAirdropTradeCard(
                             state.Session,
                             state.Faction,
-                            OnAirdropTradeCardSubmitted));
+                            OnAirdropTradeCardSubmitted,
+                            revision));
                     }
-                },
-                () => OpenAirdropAlternativeSelection(state.Session, state.Faction, state.BaseParameters, availableCandidates));
+                });
             Find.WindowStack.Add(confirmationDialog);
         }
 
@@ -500,84 +288,6 @@ namespace RimChat.UI
             string payments = string.Join("\n", (trade?.PaymentLines ?? new List<ItemAirdropPreparedPaymentLine>())
                 .Select(line => $"• {(string.IsNullOrWhiteSpace(line.Label) ? line.DefName : line.Label)} x{line.Count}"));
             return $"{"RimChat_AirdropFactionDelivers".Translate()}:\n{deliveries}\n\n{"RimChat_AirdropPlayerPays".Translate()}:\n{payments}";
-        }
-
-        private static List<PendingAirdropSelectionCandidate> ClonePendingAirdropCandidates(
-            List<PendingAirdropSelectionCandidate> candidates)
-        {
-            if (candidates == null || candidates.Count <= 0)
-            {
-                return new List<PendingAirdropSelectionCandidate>();
-            }
-
-            return candidates
-                .Where(candidate => candidate != null)
-                .Select(candidate => new PendingAirdropSelectionCandidate
-                {
-                    Index = candidate.Index,
-                    DefName = candidate.DefName ?? string.Empty,
-                    Label = candidate.Label ?? string.Empty,
-                    UnitPrice = candidate.UnitPrice,
-                    MaxLegalCount = candidate.MaxLegalCount
-                })
-                .ToList();
-        }
-
-        private void OpenAirdropAlternativeSelection(
-            FactionDialogueSession currentSession,
-            Faction currentFaction,
-            Dictionary<string, object> baseParameters,
-            List<PendingAirdropSelectionCandidate> availableCandidates)
-        {
-            if (currentFaction == null || currentSession == null || availableCandidates == null || availableCandidates.Count <= 1)
-            {
-                return;
-            }
-
-            Dictionary<string, object> safeParams = baseParameters ?? new Dictionary<string, object>();
-
-            var options = new List<FloatMenuOption>();
-            foreach (PendingAirdropSelectionCandidate candidate in availableCandidates)
-            {
-                if (candidate == null || string.IsNullOrWhiteSpace(candidate.DefName))
-                {
-                    continue;
-                }
-
-                string optionText = "RimChat_ItemAirdropSelectionPendingLine".Translate(
-                    candidate.Index,
-                    candidate.Label ?? candidate.DefName,
-                    candidate.DefName,
-                    candidate.UnitPrice.ToString("F1", CultureInfo.InvariantCulture),
-                    Math.Max(0, candidate.MaxLegalCount)).ToString();
-                options.Add(new FloatMenuOption(optionText, () =>
-                {
-                    Dictionary<string, object> mappedParameters = CloneParameters(safeParams);
-                    mappedParameters["selected_def"] = candidate.DefName;
-                    var mappedAction = new AIAction
-                    {
-                        ActionType = AIActionNames.RequestItemAirdrop,
-                        Parameters = mappedParameters,
-                        Reason = "selection_manual_alternative"
-                    };
-
-                    if (!TryHandleAirdropActionWithConfirmation(mappedAction, currentSession, currentFaction, out _))
-                    {
-                        currentSession?.AddMessage(
-                            "System",
-                            "RimChat_ItemAirdropCommitFailedSystem".Translate("manual_selection_failed"),
-                            false,
-                            DialogueMessageType.System);
-                    }
-                }));
-            }
-
-            if (options.Count <= 0)
-            {
-                return;
-            }
-
-            Find.WindowStack.Add(new FloatMenu(options));
         }
 
         private sealed class Dialog_AirdropTradeConfirmWithAlternative : Window
@@ -597,6 +307,8 @@ namespace RimChat.UI
             private readonly Action onCancel;
             private readonly Action onAlternative;
             private readonly bool optionalAlternativeVisible;
+            private readonly string alternativeLabel;
+            private readonly string cancelLabel;
 
             public override Vector2 InitialSize => new Vector2(500f, string.IsNullOrWhiteSpace(basketDetails) ? 320f : 420f);
 
@@ -612,6 +324,8 @@ namespace RimChat.UI
                 string adjustmentReason,
                 string basketDetails,
                 bool hasAlternative,
+                string alternativeLabel,
+                string cancelLabel,
                 Action onConfirm,
                 Action onCancel,
                 Action onAlternative)
@@ -630,6 +344,8 @@ namespace RimChat.UI
                 this.onCancel = onCancel;
                 this.onAlternative = onAlternative;
                 this.optionalAlternativeVisible = hasAlternative;
+                this.alternativeLabel = alternativeLabel ?? string.Empty;
+                this.cancelLabel = cancelLabel ?? string.Empty;
                 forcePause = true;
                 doCloseX = false;
                 absorbInputAroundWindow = true;
@@ -722,7 +438,7 @@ namespace RimChat.UI
                     return;
                 }
 
-                if (Widgets.ButtonText(cancelRect, "RimChat_ItemAirdropConfirmCancel".Translate()))
+                if (Widgets.ButtonText(cancelRect, cancelLabel))
                 {
                     onCancel?.Invoke();
                     Close();
@@ -739,7 +455,7 @@ namespace RimChat.UI
                 GUI.color = new Color(0.45f, 0.45f, 0.45f);
                 float altY = cancelRect.y - 24f;
                 Rect alternativeRect = new Rect(inRect.x, altY, inRect.width, 20f);
-                if (Widgets.ButtonText(alternativeRect, "RimChat_ItemAirdropAlternativeLowVisibility".Translate()))
+                if (Widgets.ButtonText(alternativeRect, alternativeLabel))
                 {
                     onAlternative?.Invoke();
                     Close();
@@ -861,42 +577,34 @@ namespace RimChat.UI
             SaveFactionMemory(currentSession, currentFaction);
         }
 
-        private static bool IsAirdropDelayedIntent(PendingDelayedActionIntent intent)
+        private void ReturnConfirmedAirdropTradeToNegotiation(
+            FactionDialogueSession currentSession,
+            Faction currentFaction)
         {
-            return intent != null &&
-                   string.Equals(intent.ActionType, AIActionNames.RequestItemAirdrop, StringComparison.Ordinal);
-        }
-
-        private static bool ClearAirdropDelayedIntentRuntime(FactionDialogueSession currentSession)
-        {
-            if (currentSession == null)
+            if (!string.IsNullOrWhiteSpace(currentSession?.pendingAirdropTradeCardRequestId))
             {
-                return false;
+                currentSession.SetAirdropTradeCardStatus(
+                    currentSession.pendingAirdropTradeCardRequestId,
+                    AirdropTradeCardStatus.Pending);
             }
 
-            bool cleared = false;
-            if (IsAirdropDelayedIntent(currentSession.pendingDelayedActionIntent))
-            {
-                currentSession.pendingDelayedActionIntent = null;
-                cleared = true;
-            }
-
-            if (IsAirdropDelayedIntent(currentSession.lastDelayedActionIntent))
-            {
-                currentSession.lastDelayedActionIntent = null;
-                cleared = true;
-            }
-
-            return cleared;
+            ResetAirdropConfirmationRuntime(
+                currentSession,
+                "player_revising_confirmation",
+                disposeLease: true,
+                clearTradeCardReference: false,
+                resetStageToIdle: true);
+            Log.Message(
+                $"[RimChat] AirdropConfirmRevision: requestId={currentSession?.pendingAirdropTradeCardRequestId ?? "none"},faction={currentFaction?.Name ?? "null"}");
+            SaveFactionMemory(currentSession, currentFaction);
         }
 
         private void CancelConfirmedAirdropTrade(FactionDialogueSession currentSession, Faction currentFaction, bool skipSystemMessage = false)
         {
-            bool clearedDelayedIntent = ClearAirdropDelayedIntentRuntime(currentSession);
             MarkAirdropTradeCardCancelled(currentSession);
             ResetAirdropConfirmationRuntime(currentSession, "commit_cancelled", true, true, true);
             TransitionAirdropExecutionStage(currentSession, AirdropExecutionStage.Idle, "player_cancelled_confirmation");
-            Log.Message($"[RimChat] AirdropConfirmExplicitCancel: stage={currentSession?.airdropExecutionStage.ToString() ?? "null"},faction={currentFaction?.Name ?? "null"},clearedDelayedIntent={clearedDelayedIntent}");
+            Log.Message($"[RimChat] AirdropConfirmExplicitCancel: stage={currentSession?.airdropExecutionStage.ToString() ?? "null"},faction={currentFaction?.Name ?? "null"}");
 
             if (!skipSystemMessage)
             {

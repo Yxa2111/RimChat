@@ -11,14 +11,17 @@ using Verse;
 namespace RimChat.UI
 {
     /// <summary>/// Dependencies: AIAction parser output, GameComponent_DiplomacyManager social APIs.
- /// Responsibility: handle explicit social post actions and dialogue keyword fallback.
+    /// Responsibility: handle explicit social post actions.
  ///</summary>
     public partial class Dialog_DiplomacyDialogue
     {
-        private const float RandomDialogueSocialPostChance = 0.15f;
-
-        private bool TryHandleSocialCircleAction(AIAction action, FactionDialogueSession currentSession, Faction currentFaction)
+        private bool TryHandleSocialCircleAction(
+            AIAction action,
+            FactionDialogueSession currentSession,
+            Faction currentFaction,
+            out ActionExecutionOutcome outcome)
         {
+            outcome = null;
             if (action == null || !string.Equals(action.ActionType, AIActionNames.PublishPublicPost, StringComparison.Ordinal))
             {
                 return false;
@@ -27,12 +30,14 @@ namespace RimChat.UI
             var manager = GameComponent_DiplomacyManager.Instance;
             if (manager == null || currentFaction == null)
             {
+                outcome = ActionExecutionOutcome.Failure(action, "Social-circle manager or faction is unavailable.");
                 return true;
             }
 
             if (!(RimChat.Core.RimChatMod.Instance?.InstanceSettings?.EnablePlayerInfluenceNews ?? true))
             {
-                currentSession?.AddMessage("System", "RimChat_SocialActionBlocked".Translate(), false, DialogueMessageType.System);
+                string message = "RimChat_SocialActionBlocked".Translate().ToString();
+                outcome = ActionExecutionOutcome.Failure(action, message);
                 return true;
             }
 
@@ -60,104 +65,14 @@ namespace RimChat.UI
                 ? "RimChat_SocialActionQueued".Translate()
                 : "RimChat_SocialActionFailedReason".Translate(
                     GameComponent_DiplomacyManager.GetSocialFailureReasonLabel(enqueueResult.FailureReason));
-            currentSession?.AddMessage("System", systemMessage, false, DialogueMessageType.System);
+            if (ok)
+            {
+                currentSession?.AddMessage("System", systemMessage, false, DialogueMessageType.System);
+            }
+            outcome = ok
+                ? ActionExecutionOutcome.Success(action, systemMessage)
+                : ActionExecutionOutcome.Failure(action, systemMessage);
             return true;
-        }
-
-        private void TryGenerateDialogueKeywordSocialPost(
-            string playerMessage,
-            string aiText,
-            List<AIAction> actions,
-            Faction currentFaction,
-            FactionDialogueSession currentSession)
-        {
-            if (currentFaction == null || string.IsNullOrWhiteSpace(playerMessage)) return;
-            if (!(RimChat.Core.RimChatMod.Instance?.InstanceSettings?.EnablePlayerInfluenceNews ?? true)) return;
-
-            bool hasExplicitSocialAction = actions != null &&
-                                           actions.Any(a => string.Equals(a?.ActionType, AIActionNames.PublishPublicPost, StringComparison.Ordinal));
-            if (hasExplicitSocialAction) return;
-
-            SocialPostEnqueueResult enqueueResult = new SocialPostEnqueueResult
-            {
-                Triggered = false,
-                FailureReason = SocialPostEnqueueFailureReason.Unknown
-            };
-            bool created = GameComponent_DiplomacyManager.Instance != null &&
-                           GameComponent_DiplomacyManager.Instance.TryCreateKeywordDialoguePost(
-                               currentFaction,
-                               playerMessage,
-                               aiText,
-                               out enqueueResult);
-            Log.Message($"[RimChat] Player-influenced post attempt: faction={currentFaction?.Name}, created={created}, triggered={enqueueResult.Triggered}, failureReason={enqueueResult.FailureReason}");
-            if (!enqueueResult.Triggered)
-            {
-                TryGenerateRandomDialogueSocialPost(playerMessage, aiText, currentFaction, currentSession);
-                return;
-            }
-
-            if (created)
-            {
-                currentSession?.AddMessage("System", "RimChat_SocialActionQueued".Translate(), false, DialogueMessageType.System);
-            }
-            else
-            {
-                string reasonLabel = GameComponent_DiplomacyManager.GetSocialFailureReasonLabel(enqueueResult.FailureReason);
-                currentSession?.AddMessage(
-                    "System",
-                    "RimChat_SocialActionFailedReason".Translate(reasonLabel),
-                    false,
-                    DialogueMessageType.System);
-            }
-        }
-
-        private void TryGenerateRandomDialogueSocialPost(
-            string playerMessage,
-            string aiText,
-            Faction currentFaction,
-            FactionDialogueSession currentSession)
-        {
-            if (currentFaction == null)
-            {
-                return;
-            }
-
-            if (Rand.Value > RandomDialogueSocialPostChance)
-            {
-                return;
-            }
-
-            string aiTextOnly = (aiText ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(aiTextOnly))
-            {
-                return;
-            }
-
-            SocialPostCategory category = SocialCircleService.InferCategory(aiTextOnly, string.Empty);
-            int sentiment = SocialCircleService.InferSentiment(aiTextOnly);
-            if (sentiment == 0)
-            {
-                sentiment = category == SocialPostCategory.Military ? -1 : 1;
-            }
-
-            Faction targetFaction = GameComponent_DiplomacyManager.Instance?.ResolveSocialTargetFaction(string.Empty, currentFaction);
-            bool queued = GameComponent_DiplomacyManager.Instance != null &&
-                          GameComponent_DiplomacyManager.Instance.EnqueuePublicPost(
-                              currentFaction,
-                              targetFaction,
-                              category,
-                              sentiment,
-                              aiTextOnly,
-                              true,
-                              out SocialPostEnqueueResult enqueueResult,
-                              string.Empty,
-                              DebugGenerateReason.DialogueKeyword);
-            if (!queued)
-            {
-                return;
-            }
-
-            currentSession?.AddMessage("System", "RimChat_SocialActionQueued".Translate(), false, DialogueMessageType.System);
         }
 
         private static string GetStringParameter(Dictionary<string, object> parameters, string key)

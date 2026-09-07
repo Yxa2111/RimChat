@@ -104,8 +104,6 @@ namespace RimChat.UI
         private const float BlockedReasonAutoScrollSpeed = 18f;
         private const float BlockedReasonAutoScrollPauseSeconds = 0.6f;
         private const string DialogueInputControlName = "DialogueInput";
-        private const float FallbackRetryButtonSize = 18f;
-        private const float FallbackRetryButtonMargin = 8f;
         
         // 玩家message气泡颜色 #91ed61
         private static readonly Color PlayerBubbleColor = new Color(0.58f, 0.88f, 0.43f, 1f);
@@ -123,7 +121,6 @@ namespace RimChat.UI
         private Dictionary<DialogueMessageData, TypewriterState> typewriterStates = new Dictionary<DialogueMessageData, TypewriterState>();
         private float lastTypewriterUpdate = 0f;
         private bool _typewriterDirty = true;
-        private bool fallbackRetryRequestedThisFrame;
 
         private const float PendingAirdropDialogDelaySeconds = 1f;
         private const float MaxTypewriterWaitSeconds = 8f;
@@ -144,7 +141,6 @@ namespace RimChat.UI
             public Faction Faction;
             public ItemAirdropPreparedTradeData PreparedTrade;
             public Dictionary<string, object> BaseParameters;
-            public List<PendingAirdropSelectionCandidate> PendingCandidates;
             public float ReadyAtRealtime = -1f;
             public bool DelayStarted;
             public bool WaitingForTypewriterLogged;
@@ -360,6 +356,10 @@ namespace RimChat.UI
             UnsubscribeFromDiplomacyMemoryChanges();
             CancelStrategySuggestionRequest();
             CancelPendingAirdropSelectionRequest();
+            if (ReturnUncommittedAirdropTradeCardToPending(session, "dialogue_window_closed"))
+            {
+                SaveFactionMemory(session, faction);
+            }
 
             if (!IsSwitchingFactionOnClose())
             {
@@ -468,6 +468,10 @@ namespace RimChat.UI
             long startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
             CancelStrategySuggestionRequest();
             CancelPendingAirdropSelectionRequest();
+            if (ReturnUncommittedAirdropTradeCardToPending(session, "dialogue_faction_switched"))
+            {
+                SaveFactionMemory(session, faction);
+            }
             TryCommitDiplomacySessionSummaryOnClose();
             long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
             LockPresenceCacheOnDialogueClose();
@@ -1400,7 +1404,6 @@ namespace RimChat.UI
 
         private void DrawMessages(Rect rect)
         {
-            fallbackRetryRequestedThisFrame = false;
             lastMessagesViewRect = rect;
             if (session == null || session.messages.Count == 0)
             {
@@ -1644,14 +1647,9 @@ namespace RimChat.UI
 
             // Messagecontents (使用真正的逐字outputtext进行排版渲染)
             string displayText = GetDisplayText(msg);
-            float retryReservedWidth = ShouldShowFallbackRetryButton(msg)
-                ? FallbackRetryButtonSize + FallbackRetryButtonMargin
-                : 0f;
-            float effectiveContentWidth = Mathf.Max(40f, contentWidth - retryReservedWidth);
-            float actualTextHeight = Text.CalcHeight(displayText, effectiveContentWidth);
-            Rect contentRect = new Rect(contentX, contentY, effectiveContentWidth, actualTextHeight);
+            float actualTextHeight = Text.CalcHeight(displayText, contentWidth);
+            Rect contentRect = new Rect(contentX, contentY, contentWidth, actualTextHeight);
             Widgets.Label(contentRect, displayText);
-            DrawFallbackRetryButton(msg, rect, contentY, headerHeight);
 
             GUI.color = Color.white;
             Text.Font = GameFont.Small;
@@ -2555,10 +2553,7 @@ namespace RimChat.UI
 
             // 精确计算text高度: based ondynamicoutput的字符重新计算
             float contentWidth = width - 20f; // padding 10f * 2
-            float retryReserved = (msg != null && msg.allowFallbackRetry && !msg.isPlayer)
-                ? FallbackRetryButtonSize + FallbackRetryButtonMargin : 0f;
-            float effectiveWidth = Mathf.Max(40f, contentWidth - retryReserved);
-            float textHeight = Text.CalcHeight(displayText, effectiveWidth);
+            float textHeight = Text.CalcHeight(displayText, contentWidth);
 
             // 总高度 = 上内边距(8f) + 头高度(18f) + 间距(2f) + contents高度 + 下内边距(6f) = 34f + textHeight
             float totalHeight = 34f + textHeight;
@@ -2740,9 +2735,6 @@ namespace RimChat.UI
                     airdropTradeCardPayload.NeedItems.Count > 0 ? airdropTradeCardPayload.NeedItems : null,
                     airdropTradeCardPayload.PaymentItems.Count > 0 ? airdropTradeCardPayload.PaymentItems : null);
             }
-            currentSession.lastPlayerRequestText = playerMessage;
-            currentSession.lastPlayerRequestWasAirdropTradeCard = airdropTradeCardPayload != null;
-
             Pawn playerSpeakerPawn = ResolvePlayerSpeakerPawn();
             if (airdropTradeCardPayload != null)
             {
@@ -2785,11 +2777,6 @@ namespace RimChat.UI
                 return;
             }
 
-            if (TryHandlePendingAirdropSelectionBeforeAi(playerMessage, currentSession, currentFaction))
-            {
-                return;
-            }
-
             List<ChatMessageData> chatMessages;
             try
             {
@@ -2825,15 +2812,18 @@ namespace RimChat.UI
                 return;
             }
 
-            bool queued = conversationController.TrySendDialogueRequest(
+            List<NativeToolDefinition> nativeTools = NativeToolCatalog.Build(currentFaction, currentSession);
+            bool queued = conversationController.TrySendNativeToolDialogueRequest(
                 currentSession,
                 currentFaction,
                 chatMessages,
+                nativeTools,
                 requestContext,
                 windowInstanceId,
-                onSuccess: envelope =>
+                executeTools: calls => ExecuteNativeToolCalls(calls, currentSession, currentFaction),
+                onSuccess: response =>
                 {
-                    AddAIResponseToSession(envelope, currentSession, currentFaction, playerMessage);
+                    AddNativeAIResponseToSession(response, currentSession, currentFaction);
                 },
                 onError: error =>
                 {
@@ -3049,11 +3039,10 @@ namespace RimChat.UI
 
             string result = $"{visibleText}\n\n{string.Join("\n\n", blocks)}";
 
-            // Reinforce JSON format when airdrop data is present
             if (currentSession.hasPendingAirdropTradeCardReference)
             {
                 result += "\n\n[REMINDER] This is a pending airdrop trade card. "
-                    + "If you accept it, you MUST call exactly {\"action\":\"accept_item_airdrop\",\"parameters\":{\"request_id\":\"<the exact request_id from AirdropTradeCardReference>\"}}. "
+                    + "If you accept it, call the accept_item_airdrop tool with request_id copied exactly from AirdropTradeCardReference. "
                     + "Do not call request_item_airdrop directly for this card, do not change its terms, and do not claim the trade is completed before the player confirms. "
                     + "If you reject or counter-offer, do not call accept_item_airdrop.";
             }
@@ -3178,105 +3167,6 @@ namespace RimChat.UI
                 .ToList();
         }
 
-
-        private void AddAIResponseToSession(DialogueResponseEnvelope envelope, FactionDialogueSession currentSession, Faction currentFaction, string playerMessage = null)
-        {
-            // 解析 AI response
-            var parsedResponse = AIResponseParser.ParseResponse(envelope, currentFaction);
-            parsedResponse = ApplyDiplomacyIntentDrivenActionMapping(parsedResponse, currentSession, playerMessage);
-            bool hasAirdropAction = parsedResponse.Actions.Any(action =>
-                string.Equals(action?.ActionType, AIActionNames.RequestItemAirdrop, StringComparison.Ordinal));
-            bool hasPresenceAction = parsedResponse.Actions.Any(a => IsPresenceActionType(a?.ActionType));
-            List<ActionExecutionOutcome> actionOutcomes = parsedResponse.Actions.Count > 0
-                ? ExecuteAIActions(parsedResponse.Actions, currentSession, currentFaction, playerMessage)
-                : new List<ActionExecutionOutcome>();
-            RecordDelayedActionRuntimeState(actionOutcomes, currentSession);
-
-            string dialogueText = parsedResponse.DialogueText;
-
-            // 如果没有dialoguetext但有成功 action, 生成默认回复
-            if (string.IsNullOrWhiteSpace(dialogueText) && parsedResponse.Actions.Count > 0)
-            {
-                List<AIAction> successfulActions = actionOutcomes
-                    .Where(outcome => outcome.IsSuccess && outcome.Action != null)
-                    .Select(outcome => outcome.Action)
-                    .ToList();
-                if (successfulActions.Count > 0)
-                {
-                    dialogueText = GenerateResponseFromActions(successfulActions);
-                }
-            }
-
-            dialogueText = FinalizeDialogueTextWithActionOutcomes(dialogueText, actionOutcomes);
-            if (string.IsNullOrWhiteSpace(dialogueText))
-            {
-                dialogueText = ImmersionOutputGuard.BuildLocalFallbackDialogue(DialogueUsageChannel.Diplomacy);
-            }
-            bool isImmersionFallback = string.Equals(
-                dialogueText,
-                ImmersionOutputGuard.BuildLocalFallbackDialogue(DialogueUsageChannel.Diplomacy),
-                StringComparison.Ordinal);
-            TryCaptureAndCacheAirdropCounteroffer(dialogueText, currentSession);
-
-            Pawn speakerPawn = ResolveFactionSpeakerPawn(currentSession, currentFaction);
-            string senderName = ResolveFactionSenderName(currentFaction, speakerPawn);
-            currentSession.lastAssistantVisibleText = dialogueText ?? string.Empty;
-
-            // Suppress consecutive identical fallbacks — the previous one already
-            // shows the retry button; stacking more adds no value and confuses the player.
-            if (isImmersionFallback && currentSession.lastAssistantMessageWasImmersionFallback)
-            {
-                Log.Warning($"[RimChat] Suppressed consecutive immersion fallback for faction={currentFaction?.Name ?? "null"}");
-                return;
-            }
-            currentSession.lastAssistantMessageWasImmersionFallback = isImmersionFallback;
-
-            currentSession.AddMessage(senderName, dialogueText, false, DialogueMessageType.Normal, speakerPawn);
-            if (currentSession.messages.Count > 0)
-            {
-                DialogueMessageData addedMessage = currentSession.messages[currentSession.messages.Count - 1];
-                if (addedMessage != null)
-                {
-                    addedMessage.allowFallbackRetry = isImmersionFallback;
-                }
-            }
-            AppendSuccessfulActionSystemMessages(actionOutcomes, currentSession, currentFaction);
-            AppendFailedActionSystemMessages(actionOutcomes, currentSession);
-
-
-            bool hasSuccessfulAction = actionOutcomes.Any(outcome => outcome.IsSuccess);
-            foreach (ActionExecutionOutcome failedOutcome in actionOutcomes.Where(outcome => !outcome.IsSuccess))
-            {
-                if (failedOutcome.Action?.ActionType == AIActionNames.RequestItemAirdrop)
-                {
-                    continue;
-                }
-
-                bool isForcedSendInfoAction = IsForcedSendInfoActionType(failedOutcome.Action?.ActionType);
-                if (!isForcedSendInfoAction && hasSuccessfulAction && IsExpectedActionDenyFailure(failedOutcome))
-                {
-                    continue;
-                }
-
-                string actionName = failedOutcome.Action?.ActionType ?? "RimChat_Unknown".Translate().ToString();
-                string reason = string.IsNullOrWhiteSpace(failedOutcome.Message)
-                    ? "RimChat_Unknown".Translate().ToString()
-                    : failedOutcome.Message;
-                currentSession.AddMessage("System", $"无法执行动作 '{actionName}': {reason}", false, DialogueMessageType.System);
-            }
-
-            if (!hasPresenceAction)
-            {
-                TryAutoApplyPresenceFallback(dialogueText, currentSession, currentFaction);
-            }
-
-            TryGenerateDialogueKeywordSocialPost(playerMessage, dialogueText, parsedResponse.Actions, currentFaction, currentSession);
-            ApplyStrategySuggestions(currentSession, parsedResponse.StrategySuggestions);
-
-            // Dialogue结束后savememory
-            SaveFactionMemory(currentSession, currentFaction);
-        }
-
         private void AppendSuccessfulActionSystemMessages(List<ActionExecutionOutcome> actionOutcomes, FactionDialogueSession currentSession, Faction faction)
         {
             if (currentSession == null || actionOutcomes == null || actionOutcomes.Count == 0)
@@ -3304,39 +3194,6 @@ namespace RimChat.UI
             }
         }
 
-        private void AppendFailedActionSystemMessages(List<ActionExecutionOutcome> actionOutcomes, FactionDialogueSession currentSession)
-        {
-            if (currentSession == null || actionOutcomes == null || actionOutcomes.Count == 0)
-            {
-                return;
-            }
-
-            foreach (ActionExecutionOutcome outcome in actionOutcomes)
-            {
-                if (outcome.IsSuccess || outcome.Action == null)
-                {
-                    continue;
-                }
-
-                if (outcome.Action.ActionType == AIActionNames.RequestItemAirdrop)
-                {
-                    ItemAirdropResultData payload = TryResolveItemAirdropResultData(outcome);
-                    if (payload != null && !string.IsNullOrWhiteSpace(payload.FailureCode))
-                    {
-                        // Include the detailed failure message so the AI can learn from
-                        // specific errors like "required=10950, available=5550" on next turn.
-                        string detail = outcome.Message ?? payload.FailureCode;
-                        currentSession.AddMessage(
-                            "System",
-                            BuildAirdropFailureSystemMessage(payload.FailureCode, detail),
-                            false,
-                            DialogueMessageType.System);
-                    }
-                    continue;
-                }
-            }
-        }
-
         private void AppendAirdropSuccessSystemMessage(ActionExecutionOutcome outcome, FactionDialogueSession currentSession, Faction faction)
         {
             if (outcome.Data is ItemAirdropAsyncQueuedData)
@@ -3352,11 +3209,6 @@ namespace RimChat.UI
             ItemAirdropPendingSelectionData pendingSelection = TryResolveItemAirdropPendingSelectionData(outcome);
             if (pendingSelection != null)
             {
-                if (DeterminePendingSelectionResolution(pendingSelection) == AirdropPendingResolution.AutoPickTop1)
-                {
-                    return;
-                }
-
                 currentSession.AddMessage(
                     "System",
                     BuildAirdropPendingSelectionSystemText(pendingSelection),
@@ -3524,23 +3376,6 @@ namespace RimChat.UI
             string response = GenerateSimulatedResponse(playerMessage, currentFaction);
             currentSession.AddMessage(senderName, response, false, DialogueMessageType.Normal, speakerPawn);
 
-            // Execute forced actions from hidden directive even in fallback mode
-            if (TryParseSendInfoForcedActionDirective(playerMessage, out SendInfoForcedActionDirective directive))
-            {
-                var action = new AIAction
-                {
-                    ActionType = directive.ActionType,
-                    Parameters = new Dictionary<string, object>(StringComparer.Ordinal)
-                };
-                var executor = new AIActionExecutor(currentFaction, applyDialogueApiGoodwillCost: true);
-                ActionResult result = executor.ExecuteAction(action);
-                if (!result.IsSuccess)
-                {
-                    string reason = result.Message ?? "Unknown error";
-                    currentSession.AddMessage("System", $"无法执行动作 '{directive.ActionType}': {reason}", false, DialogueMessageType.System);
-                }
-            }
-
             SaveFactionMemory(currentSession, currentFaction);
         }
 
@@ -3642,6 +3477,11 @@ namespace RimChat.UI
                 return;
             }
 
+            if (state.Session.isWaitingForResponse)
+            {
+                return;
+            }
+
             if (state.Session.airdropExecutionStage != AirdropExecutionStage.PreparedAwaitingConfirm)
             {
                 ClearPendingAirdropDialogState($"unexpected_stage_{state.Session.airdropExecutionStage}", true);
@@ -3715,183 +3555,6 @@ namespace RimChat.UI
             return msg.message;
         }
 
-        private bool ShouldShowFallbackRetryButton(DialogueMessageData msg)
-        {
-            return session != null &&
-                   msg != null &&
-                   !msg.isPlayer &&
-                   !msg.IsSystemMessage() &&
-                   msg.allowFallbackRetry &&
-                   !session.isWaitingForResponse &&
-                   !fallbackRetryRequestedThisFrame &&
-                   string.Equals(msg.message ?? string.Empty, "RimChat_ImmersionFallback_Diplomacy".Translate().ToString(), StringComparison.Ordinal);
-        }
-
-        private void DrawFallbackRetryButton(DialogueMessageData msg, Rect bubbleRect, float contentY, float headerHeight)
-        {
-            if (!ShouldShowFallbackRetryButton(msg))
-            {
-                return;
-            }
-
-            Rect buttonRect = new Rect(
-                bubbleRect.xMax - FallbackRetryButtonSize - 10f,
-                contentY + headerHeight + 2f,
-                FallbackRetryButtonSize,
-                FallbackRetryButtonSize);
-            bool hovered = Mouse.IsOver(buttonRect);
-            Color bg = hovered
-                ? new Color(0.30f, 0.36f, 0.44f, 0.92f)
-                : new Color(0.24f, 0.29f, 0.36f, 0.85f);
-            DrawRoundedRect(buttonRect, bg, 6f);
-            Text.Anchor = TextAnchor.MiddleCenter;
-            Text.Font = GameFont.Tiny;
-            GUI.color = Color.white;
-            Widgets.Label(buttonRect, "↻");
-            Text.Anchor = TextAnchor.UpperLeft;
-            Text.Font = GameFont.Small;
-            GUI.color = Color.white;
-            TooltipHandler.TipRegion(buttonRect, "RimChat_Retry".Translate().ToString());
-            if (Widgets.ButtonInvisible(buttonRect))
-            {
-                fallbackRetryRequestedThisFrame = true;
-                TryRetryImmersionFallbackMessage(msg);
-                Event.current.Use();
-            }
-        }
-
-        private void TryRetryImmersionFallbackMessage(DialogueMessageData msg)
-        {
-            if (session == null || msg == null || session.isWaitingForResponse)
-            {
-                return;
-            }
-
-            string playerMessage = session.lastPlayerRequestText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(playerMessage))
-            {
-                session.AddMessage("System", "RimChat_DialogueRequestUnavailable".Translate(), false, DialogueMessageType.System);
-                return;
-            }
-
-            ReplaceFallbackMessageWithRetryPending(msg);
-
-            if (!CanSendMessageNow())
-            {
-                session.AddMessage("System", BuildAiTurnStatusText(), false, DialogueMessageType.System);
-                return;
-            }
-
-            List<ChatMessageData> chatMessages;
-            try
-            {
-                chatMessages = BuildChatMessages(playerMessage, session, playerMessage, session.lastPlayerRequestWasAirdropTradeCard);
-            }
-            catch (PromptRenderException ex)
-            {
-                HandlePromptRenderFailure(ex);
-                return;
-            }
-            catch (Exception ex)
-            {
-                HandlePromptBuildFailure(ex, session, faction);
-                return;
-            }
-
-            chatMessages = AppendManualFallbackRetryMessage(chatMessages);
-            DialogueRuntimeContext requestContext = runtimeContext.WithCurrentRuntimeMarkers();
-            bool resolved = DialogueContextResolver.TryResolveLiveContext(
-                requestContext,
-                out DialogueLiveContext liveContext,
-                out string resolveReason);
-            string validateReason = string.Empty;
-            bool validated = resolved && DialogueContextValidator.ValidateRequestSend(requestContext, liveContext, out validateReason);
-            if (!resolved || !validated)
-            {
-                HandleDroppedRequest(resolveReason, validateReason);
-                return;
-            }
-
-            bool queued = conversationController.TrySendDialogueRequest(
-                session,
-                faction,
-                chatMessages,
-                requestContext,
-                windowInstanceId,
-                onSuccess: envelope =>
-                {
-                    AddAIResponseToSession(envelope, session, faction, playerMessage);
-                },
-                onError: error =>
-                {
-                    Log.Warning($"[RimChat] Fallback retry request failed: {error}");
-                    HandleSessionRequestError(session, error);
-                },
-                onProgress: null,
-                onDropped: reason =>
-                {
-                    HandleSessionDroppedRequest(session, faction, reason);
-                });
-
-            if (!queued)
-            {
-                if (conversationController.IsRequestDebounced(session))
-                {
-                    HandleDroppedRequest("request_debounced");
-                    return;
-                }
-
-                if (session.isWaitingForResponse)
-                {
-                    HandleDroppedRequest("request_already_waiting");
-                    return;
-                }
-
-                HandleDroppedRequest(session.aiError, "request_queue_rejected");
-            }
-        }
-
-        private void ReplaceFallbackMessageWithRetryPending(DialogueMessageData msg)
-        {
-            if (msg == null)
-            {
-                return;
-            }
-
-            msg.allowFallbackRetry = false;
-            msg.message = "RimChat_Retry".Translate().ToString() + "...";
-            if (typewriterStates.ContainsKey(msg))
-            {
-                typewriterStates.Remove(msg);
-            }
-        }
-
-        private static List<ChatMessageData> AppendManualFallbackRetryMessage(List<ChatMessageData> messages)
-        {
-            var updated = new List<ChatMessageData>(messages ?? new List<ChatMessageData>());
-            updated.Add(new ChatMessageData
-            {
-                role = "user",
-                content = BuildManualFallbackRetryInstruction()
-            });
-            return updated;
-        }
-
-        private static string BuildManualFallbackRetryInstruction()
-        {
-            var sb = new StringBuilder();
-            sb.Append("MANUAL_FALLBACK_RETRY=1. ");
-            sb.Append("Previous diplomacy reply degraded to the local fallback template. ");
-            sb.Append("Return exactly one JSON object only. ");
-            sb.Append("Required top-level key: visible_dialogue. Optional top-level key: actions. ");
-            sb.Append("Put all visible faction speech inside visible_dialogue. ");
-            sb.Append("visible_dialogue must contain 1-2 concise in-character diplomacy sentences and must not be empty. ");
-            sb.Append("Do not output the fallback line again. ");
-            sb.Append("Do not output explanations, markdown fences, parenthetical metadata, debug text, or any text outside the JSON object. ");
-            sb.Append("If gameplay effects are required, include matching actions in the same top-level actions array.");
-            return sb.ToString();
-        }
-
         private string GetPlayerSenderName()
         {
             return ResolvePlayerSenderName(ResolvePlayerSpeakerPawn());
@@ -3910,108 +3573,7 @@ namespace RimChat.UI
 
         private string GenerateSimulatedResponse(string playerMessage, Faction f)
         {
-            if (string.IsNullOrEmpty(playerMessage))
-                return "I see. What else would you like to discuss?";
-
-            string lowerMessage = playerMessage.ToLower();
-
-            if (lowerMessage.Contains("trade") || lowerMessage.Contains("caravan"))
-            {
-                return "We are open to trade. Our caravans can reach you soon.";
-            }
-            else if (lowerMessage.Contains("help") || lowerMessage.Contains("aid"))
-            {
-                if (f.PlayerGoodwill >= 80)
-                {
-                    return "As allies, we shall send assistance immediately.";
-                }
-                else
-                {
-                    return "We are not yet close enough for such favors. Improve our relations first.";
-                }
-            }
-            else if (lowerMessage.Contains("war") || lowerMessage.Contains("attack") || lowerMessage.Contains("raid"))
-            {
-                return "Threats will not be tolerated. Watch your words carefully.";
-            }
-            else if (lowerMessage.Contains("peace") || lowerMessage.Contains("friend"))
-            {
-                return "Peace is always preferable. We welcome friendly relations.";
-            }
-            else
-            {
-                return "Interesting. We shall consider your words carefully.";
-            }
-        }
-
-        /// <summary>/// 根据动作生成responsetext
- ///</summary>
-        private string GenerateResponseFromActions(List<AIAction> actions)
-        {
-            var sb = new System.Text.StringBuilder();
-            foreach (var action in actions)
-            {
-                switch (action.ActionType)
-                {
-                    case AIActionNames.AdjustGoodwill:
-                        if (action.Parameters.TryGetValue("amount", out object amount) && amount is int amt)
-                        {
-                            sb.AppendLine(amt > 0
-                                ? "I appreciate your words. Our relations have improved."
-                                : "Your words concern me. Our relations have suffered.");
-                        }
-                        break;
-                    case AIActionNames.SendGift:
-                        sb.AppendLine("I accept your gift. Let this strengthen our bond.");
-                        break;
-                    case AIActionNames.RequestAid:
-                        sb.AppendLine("As allies, we shall assist you.");
-                        break;
-                    case AIActionNames.DeclareWar:
-                        sb.AppendLine("You leave me no choice. Prepare for conflict!");
-                        break;
-                    case AIActionNames.MakePeace:
-                        sb.AppendLine("Let us end this conflict. Peace is preferable.");
-                        break;
-                    case AIActionNames.RequestCaravan:
-                        sb.AppendLine("Our traders will visit you soon.");
-                        break;
-                    case AIActionNames.RequestItemAirdrop:
-                        sb.AppendLine(IsAirdropTradeCardBoundAction(action)
-                            ? "The quoted airdrop is ready for your final confirmation."
-                            : "We will dispatch a supply drop to your colony.");
-                        break;
-                    case AIActionNames.PayPrisonerRansom:
-                        bool hasTarget = action.Parameters != null &&
-                            action.Parameters.TryGetValue("target_pawn_load_id", out object targetIdObj) &&
-                            targetIdObj != null &&
-                            int.TryParse(targetIdObj.ToString(), out int targetIdParsed) &&
-                            targetIdParsed > 0;
-                        bool hasOffer = action.Parameters != null &&
-                            action.Parameters.TryGetValue("offer_silver", out object offerObj) &&
-                            offerObj != null &&
-                            int.TryParse(offerObj.ToString(), out int offerParsed) &&
-                            offerParsed > 0;
-                        sb.AppendLine(hasTarget && hasOffer
-                            ? "We have received your ransom payment. Release now depends on the player's manual action."
-                            : "Before any ransom transfer, we need the exact prisoner and offer details.");
-                        break;
-                    case AIActionNames.RejectRequest:
-                        string reason = action.Parameters.TryGetValue("reason", out object r)
-                            ? r?.ToString()
-                            : "I cannot fulfill this request.";
-                        sb.AppendLine(reason);
-                        break;
-                }
-            }
-            return sb.ToString().Trim();
-        }
-
-        private string FinalizeDialogueTextWithActionOutcomes(string baseDialogueText, List<ActionExecutionOutcome> outcomes)
-        {
-            // Action failures are displayed as separate system messages via AppendFailedActionSystemMessages.
-            // Preserve the AI's dialogue instead of replacing it with failure summaries.
-            return baseDialogueText ?? string.Empty;
+            return ImmersionOutputGuard.BuildLocalFallbackDialogue(DialogueUsageChannel.Diplomacy);
         }
 
         /// <summary>/// 执行 AI 动作
@@ -4019,12 +3581,12 @@ namespace RimChat.UI
         private List<ActionExecutionOutcome> ExecuteAIActions(
             List<AIAction> actions,
             FactionDialogueSession currentSession,
-            Faction currentFaction,
-            string playerMessage)
+            Faction currentFaction)
         {
             var executor = new AIActionExecutor(currentFaction, applyDialogueApiGoodwillCost: true);
             var outcomes = new List<ActionExecutionOutcome>();
             bool acceptedAirdropThisTurn = false;
+            bool imageQueuedThisTurn = false;
             BatchRansomExecutionPlan batchRansomPlan = BuildBatchRansomExecutionPlan(actions, currentSession, currentFaction);
             if (batchRansomPlan.IsActive && !batchRansomPlan.IsValid)
             {
@@ -4100,19 +3662,23 @@ namespace RimChat.UI
                     continue;
                 }
 
-                if (TryHandlePresenceAction(action, currentSession, currentFaction))
+                if (TryHandleSendImageAction(action, currentSession, currentFaction, ref imageQueuedThisTurn, out ActionExecutionOutcome imageOutcome))
                 {
-                    outcomes.Add(ActionExecutionOutcome.Success(action, "Handled by presence pipeline."));
+                    outcomes.Add(imageOutcome);
                     continue;
                 }
 
-                if (TryHandleSocialCircleAction(action, currentSession, currentFaction))
+                if (TryHandlePresenceAction(action, currentSession, currentFaction, out ActionExecutionOutcome presenceOutcome))
                 {
-                    outcomes.Add(ActionExecutionOutcome.Success(action, "Handled by social-circle pipeline."));
+                    outcomes.Add(presenceOutcome);
                     continue;
                 }
 
-                InjectExplicitChallengeRequestHint(action, playerMessage);
+                if (TryHandleSocialCircleAction(action, currentSession, currentFaction, out ActionExecutionOutcome socialOutcome))
+                {
+                    outcomes.Add(socialOutcome);
+                    continue;
+                }
 
                 Log.Message($"[RimChat] Executing AI action: {action.ActionType}");
                 var result = executor.ExecuteAction(action);
@@ -4164,37 +3730,6 @@ namespace RimChat.UI
             return outcomes;
         }
 
-        private static void InjectExplicitChallengeRequestHint(AIAction action, string playerMessage)
-        {
-            if (action == null ||
-                !string.Equals(action.ActionType, AIActionNames.RequestRaidCallEveryone, StringComparison.Ordinal) ||
-                !LooksLikeExplicitCallEveryoneChallenge(playerMessage))
-            {
-                return;
-            }
-
-            action.Parameters ??= new Dictionary<string, object>(StringComparer.Ordinal);
-            action.Parameters["explicit_challenge_request"] = true;
-        }
-
-        private static bool LooksLikeExplicitCallEveryoneChallenge(string playerMessage)
-        {
-            if (string.IsNullOrWhiteSpace(playerMessage))
-            {
-                return false;
-            }
-
-            string normalized = playerMessage.Trim().ToLowerInvariant();
-            return normalized.Contains("call everyone") ||
-                   normalized.Contains("joint raid") ||
-                   normalized.Contains("everyone attack") ||
-                   normalized.Contains("all in") ||
-                   normalized.Contains("联合袭击") ||
-                   normalized.Contains("都叫来") ||
-                   normalized.Contains("全都叫来") ||
-                   normalized.Contains("一起上");
-        }
-
         private static bool ShouldResetRansomSelectionStateAfterSuccess(ActionResult result)
         {
             return string.Equals(ResolveRansomSuccessStatusCode(result), "paid_submitted", StringComparison.Ordinal);
@@ -4223,59 +3758,7 @@ namespace RimChat.UI
         {
             string actionType = action?.ActionType ?? "unknown";
             string reason = string.IsNullOrWhiteSpace(message) ? "unknown" : message;
-            if (IsExpectedActionDenyMessage(reason))
-            {
-                RimChatSettings settings = RimChatMod.Settings ?? RimChatMod.Instance?.InstanceSettings;
-                if ((settings?.ExpectedActionDenyLogLevel ?? ExpectedActionDenyLogLevel.Info) == ExpectedActionDenyLogLevel.Warning)
-                {
-                    Log.Warning($"[RimChat][ActionDenied][Expected] action={actionType} reason={reason}");
-                }
-                else
-                {
-                    Log.Message($"[RimChat][ActionDenied][Expected] action={actionType} reason={reason}");
-                }
-                return;
-            }
-
-            Log.Warning($"[RimChat][ActionFailed][Unexpected] action={actionType} reason={reason}");
-        }
-
-        private static bool IsExpectedActionDenyFailure(ActionExecutionOutcome outcome)
-        {
-            if (outcome == null || outcome.IsSuccess)
-            {
-                return false;
-            }
-
-            return IsExpectedActionDenyMessage(outcome.Message);
-        }
-
-        private static bool IsExpectedActionDenyMessage(string message)
-        {
-            if (string.IsNullOrWhiteSpace(message))
-            {
-                return false;
-            }
-
-            string lower = message.ToLowerInvariant();
-            return lower.Contains("blocked") ||
-                lower.Contains("cooldown") ||
-                lower.Contains("requires") ||
-                lower.Contains("not allowed") ||
-                lower.Contains("validation failed") ||
-                lower.Contains("below 0") ||
-                lower.Contains("cannot") ||
-                lower.Contains("denied");
-        }
-
-        private static bool IsForcedSendInfoActionType(string actionType)
-        {
-            if (string.IsNullOrWhiteSpace(actionType)) return false;
-            return actionType == AIActionNames.RequestCaravan
-                || actionType == AIActionNames.RequestVisitor
-                || actionType == AIActionNames.RequestAid
-                || actionType == AIActionNames.RequestRaid
-                || actionType == AIActionNames.RequestRaidCallEveryone;
+            Log.Warning($"[RimChat][ActionFailed] action={actionType} reason={reason}");
         }
 
         /// <summary>/// 为执行的 AI 动作record重要event (只更新内存)
